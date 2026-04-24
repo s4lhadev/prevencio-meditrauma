@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Genera admin_agent/.env con solo INFISICAL_TOKEN (service token). Prueba slugs production / prod.
-# APP_PRODUCT_OVERRIDE lo fija el workflow (prevencion). Sin token, sale 0 y no toca nada.
+# Genera admin_agent/.env con solo INFISICAL_TOKEN. Prueba slugs production / prod.
+# APP_PRODUCT_OVERRIDE: workflow (medisalut / prevencion). Sin token, sale 0.
+# No exige sudo: npx, binario en ~/.local/bin, o apt si sudo -n.
 set -euo pipefail
 
 REPO_ROOT="${1:-}"
@@ -27,37 +28,94 @@ fi
 
 OUT="$REPO_ROOT/$AGENT_SUB/.env"
 ENV_CANDIDATES="production prod"
+INFISICAL_CLI_VERSION="${INFISICAL_CLI_VERSION:-0.43.77}"
+NPX_PKG="${INFISICAL_NPX_PACKAGE:-@infisical/cli}"
 
-if ! command -v infisical &>/dev/null; then
-  echo "Instalando Infisical CLI (apt)…"
-  if ! command -v sudo &>/dev/null; then
-    echo "ERROR: hace falta 'sudo' para instalar infisical o instálalo en la VM a mano." >&2
-    exit 1
-  fi
-  if ! sudo -n true 2>/dev/null; then
-    echo "ERROR: sudo requiere contraseña. Instala: curl … setup.deb.sh && apt install infisical" >&2
-    exit 1
-  fi
-  curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash
-  sudo -n apt-get update -qq && sudo -n apt-get install -y infisical
-fi
+export PATH="${HOME}/.local/bin:${PATH}"
 
+run_infisical() {
+  if [ -n "${INFISICAL_VIA_NPX:-}" ]; then
+    # shellcheck disable=SC2086
+    npx -y ${NPX_PKG} "$@"
+  else
+    infisical "$@"
+  fi
+}
+
+install_infisical_to_local_bin() {
+  local arch ver tmp
+  case "$(uname -m)" in
+  x86_64) arch=amd64 ;;
+  aarch64|arm64) arch=arm64 ;;
+  *) arch=amd64 ;;
+  esac
+  ver="$INFISICAL_CLI_VERSION"
+  echo "Descargando Infisical CLI v${ver} a ~/.local/bin (sin sudo)…"
+  mkdir -p "${HOME}/.local/bin"
+  tmp="$(mktemp -d)"
+  if ! curl -fsSL "https://github.com/Infisical/cli/releases/download/v${ver}/cli_${ver}_linux_${arch}.tar.gz" -o "$tmp/infisical.tgz" 2>/dev/null; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  if ! tar xzf "$tmp/infisical.tgz" -C "$tmp" 2>/dev/null; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  local f=""
+  f=$(find "$tmp" -name infisical -type f 2>/dev/null | head -1)
+  if [ -n "$f" ] && [ -f "$f" ]; then
+    cp -f "$f" "${HOME}/.local/bin/infisical"
+    chmod 0755 "${HOME}/.local/bin/infisical"
+    rm -rf "$tmp"
+    return 0
+  fi
+  rm -rf "$tmp"
+  return 1
+}
+
+ensure_infisical() {
+  command -v infisical &>/dev/null && return 0
+  if [ -x "${HOME}/.local/bin/infisical" ]; then
+    return 0
+  fi
+  if command -v npx &>/dev/null; then
+    echo "Usando npx (sin sudo): ${NPX_PKG}"
+    export INFISICAL_VIA_NPX=1
+    return 0
+  fi
+  if install_infisical_to_local_bin; then
+    command -v infisical &>/dev/null && return 0
+  fi
+  if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
+    echo "Instalando Infisical CLI con apt (sudo sin contraseña)…"
+    curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash
+    sudo -n apt-get update -qq && sudo -n apt-get install -y infisical
+    unset INFISICAL_VIA_NPX
+  fi
+  if command -v infisical &>/dev/null; then
+    return 0
+  fi
+  echo "ERROR: no se encontró / instaló el CLI (prueba: npx o curl a GitHub, o: sudo apt install; ver PATH ~/.local/bin)." >&2
+  return 1
+}
+
+ensure_infisical
 export INFISICAL_TOKEN
 rm -f "$OUT"
 set +e
 ok=0
 for ENV_NAME in $ENV_CANDIDATES; do
-  infisical export --env="$ENV_NAME" --format=dotenv --output-file="$OUT" --token="$INFISICAL_TOKEN" 2>/dev/null
+  run_infisical export --env="$ENV_NAME" --format=dotenv --output-file="$OUT" --token="$INFISICAL_TOKEN" 2>/dev/null
   if [ -s "$OUT" ]; then ok=1; break; fi
   rm -f "$OUT"
-  (cd "$REPO_ROOT/$AGENT_SUB" && infisical run --env="$ENV_NAME" --command="env" > "$OUT" 2>/dev/null)
+  (cd "$REPO_ROOT/$AGENT_SUB" && run_infisical run --env="$ENV_NAME" --command="env" > "$OUT" 2>/dev/null)
   if [ -s "$OUT" ]; then ok=1; break; fi
   rm -f "$OUT"
 done
 set -e
 
 if [ "$ok" -ne 1 ] || [ ! -s "$OUT" ]; then
-  echo "ERROR: no se pudo generar $OUT (token o slug de entorno: prueba slugs production / prod en Infisical)." >&2
+  echo "ERROR: no se pudo generar $OUT (token o slug de entorno production / prod en Infisical)." >&2
   exit 1
 fi
 
