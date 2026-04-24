@@ -1,0 +1,4 @@
+# Igual que portal/. Mismas variables en .env o .env.local
+parameters:
+    admin_agent.internal_url: '%env(ADMIN_AGENT_INTERNAL_URL)%'
+    admin_agent.secret: '%env(ADMIN_AGENT_SECRET)%'

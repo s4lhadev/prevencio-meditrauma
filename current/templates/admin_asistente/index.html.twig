@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Asistente — Prevención</title>
+    <style>
+        :root { --bg: #0f1419; --panel: #1a2332; --text: #e6edf3; --muted: #8b9cb3; --accent: #2bb673; --err: #f85149; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .wrap { max-width: 720px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+        h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.35rem; letter-spacing: -0.02em; }
+        p.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.5rem; }
+        a.back { color: var(--accent); text-decoration: none; font-size: 0.875rem; }
+        a.back:hover { text-decoration: underline; }
+        .banner { background: rgba(248,81,73,0.12); border: 1px solid rgba(248,81,73,0.35); color: #ffb4b0; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.875rem; }
+        .log { background: var(--panel); border-radius: 10px; padding: 1rem; min-height: 220px; max-height: 45vh; overflow-y: auto; margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+        .log .u { color: #7ee2b8; }
+        .log .a { color: #a5d4ff; }
+        .row { display: flex; gap: 0.5rem; }
+        textarea { flex: 1; min-height: 48px; max-height: 160px; resize: vertical; padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid #303d50; background: #0d1117; color: var(--text); font-family: inherit; font-size: 0.95rem; }
+        button { padding: 0.65rem 1.1rem; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+        .meta { font-size: 0.75rem; color: var(--muted); margin-top: 1rem; }
+        .ix { background: var(--panel); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.88rem; }
+        .ix h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+        .ix p { margin: 0.35rem 0; color: var(--muted); }
+        .ix code { color: #7ee2b8; }
+        .ix .btns { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+        .ix button.secondary { background: #303d50; }
+        .ix button.danger { background: #5a1e1e; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <a class="back" href="/admin/">← Volver al admin</a>
+    <h1>Asistente (Prevención)</h1>
+    <p class="sub">Uso interno. Tráfico al servicio <code>admin_agent</code> (puerto 9102) y a OpenRouter.</p>
+
+    {% if not assistant_configured %}
+        <div class="banner">
+            Configura <code>ADMIN_AGENT_INTERNAL_URL</code> y <code>ADMIN_AGENT_SECRET</code> en <code>.env</code> y arranca uvicorn. Ver <code>admin_agent/README.md</code>.
+        </div>
+    {% endif %}
+
+    <div class="ix" id="ixpanel">
+        <h2>Índice del código (RAG)</h2>
+        <p>Incremental: solo reindexa archivos nuevos o modificados (por hash). «Completo» vacía y rehace todo.</p>
+        <p id="ixstat">Cargando estado…</p>
+        <div class="btns">
+            <button type="button" class="secondary" id="ixrefresh" {% if not assistant_configured %}disabled{% endif %}>Refrescar estado</button>
+            <button type="button" id="ixincr" {% if not assistant_configured %}disabled{% endif %}>Reindexar incremental</button>
+            <button type="button" class="danger" id="ixfull" {% if not assistant_configured %}disabled{% endif %}>Reindexar completo</button>
+        </div>
+    </div>
+
+    <div class="log" id="log" aria-live="polite"></div>
+    <div class="row">
+        <textarea id="input" placeholder="Escribe tu pregunta…" rows="2"></textarea>
+        <button type="button" id="send">Enviar</button>
+    </div>
+    <p class="meta">Incluye índice de código (si existe) y OpenRouter.</p>
+</div>
+<script>
+(function () {
+    var token = {{ csrf_token('admin_asistente')|json_encode|raw }};
+    var log = document.getElementById('log');
+    var input = document.getElementById('input');
+    var send = document.getElementById('send');
+    var history = [];
+    var cfg = {{ assistant_configured|json_encode|raw }};
+
+    function ixText(j) {
+        if (!j || j.error) return 'Estado: ' + (j && (j.error || j.detail) ? JSON.stringify(j) : 'error');
+        return 'Código raíz: <code>' + (j.codebase_root || '—') + '</code> · Ficheros: ' + (j.file_count || 0) + ' · Chunks: ' + (j.chunk_count || 0) + (j.last_reindex_utc ? ' · Última: ' + j.last_reindex_utc : '');
+    }
+    function loadIx() {
+        if (!cfg) return;
+        var el = document.getElementById('ixstat');
+        fetch('{{ path('admin_asistente_index_status') }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (j) { el.innerHTML = ixText(j); })
+            .catch(function (e) { el.textContent = 'No se pudo leer el índice: ' + e; });
+    }
+    function doReindex(full) {
+        if (!cfg) return;
+        if (full && !window.confirm('¿Reindexar COMPLETO?')) return;
+        var el = document.getElementById('ixstat');
+        el.textContent = 'Indexando…';
+        fetch('{{ path('admin_asistente_reindex') }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ _token: token, full: !!full })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (o) {
+            if (!o.ok) { el.textContent = 'Error: ' + JSON.stringify(o.j); return; }
+            el.innerHTML = 'Listo. ' + (o.j.took_sec != null ? o.j.took_sec + ' s · ' : '') +
+                'Reindexados: ' + (o.j.files_reindexed || 0) + ' · Sin cambio: ' + (o.j.files_unchanged || 0) +
+                ' · Chunks: ' + (o.j.chunk_count || 0);
+            loadIx();
+        }).catch(function (e) { el.textContent = 'Error: ' + e; });
+    }
+    document.getElementById('ixrefresh').addEventListener('click', loadIx);
+    document.getElementById('ixincr').addEventListener('click', function () { doReindex(false); });
+    document.getElementById('ixfull').addEventListener('click', function () { doReindex(true); });
+    loadIx();
+
+    function append(role, text) {
+        var line = document.createElement('div');
+        line.className = role === 'user' ? 'u' : 'a';
+        line.textContent = (role === 'user' ? 'Tú: ' : 'Asistente: ') + text;
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function run() {
+        var text = (input.value || '').trim();
+        if (!text) return;
+        send.disabled = true;
+        append('user', text);
+        var prior = history.map(function (m) { return { role: m.role, content: m.content }; });
+        input.value = '';
+
+        fetch('{{ path('admin_asistente_chat') }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ _token: token, message: text, messages: prior, use_codebase: true })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (o) {
+            if (!o.ok) {
+                append('assistant', 'Error: ' + (o.j.error || o.j.detail || JSON.stringify(o.j)));
+                return;
+            }
+            var reply = o.j.reply || '';
+            append('assistant', reply);
+            history.push({ role: 'user', content: text });
+            history.push({ role: 'assistant', content: reply });
+        }).catch(function (e) {
+            append('assistant', 'Error de red: ' + e);
+        }).then(function () {
+            send.disabled = false;
+            input.focus();
+        });
+    }
+
+    send.addEventListener('click', run);
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); }
+    });
+})();
+</script>
+</body>
+</html>

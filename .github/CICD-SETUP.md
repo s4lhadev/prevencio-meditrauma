@@ -9,8 +9,11 @@ Misma idea que en Medisalut: el runner entra al tailnet, luego **SSH** a la VM (
 | `TAILSCALE_AUTHKEY` | `tskey-auth-...` (o usa OAuth con tags, ver [tailscale/github-action](https://github.com/tailscale/github-action)) |
 | `DEPLOY_HOST` | IP o hostname en Tailscale (p. ej. `100.77.237.64`) |
 | `DEPLOY_SSH_PRIVATE_KEY` | Clave **privada** (completa, sin contraseña en el fichero; ver sección SSH en `medisalut/.github/CICD-SETUP.md` si falla *libcrypto*) |
+| `INFISICAL_TOKEN` | Service token de Infisical (entorno **Production**) | Opcional. Sin él, no se regenera `portal/admin_agent/.env` |
 
 **`DEPLOY_PATH` y `DEPLOY_USER`:** en *Secrets* **o** en *Variables* (mismo nombre). Si solo los tienes en *Secrets*, el workflow los usa (antes solo se leía la pestaña *Variables*).
+
+**Infisical:** solo hace falta el token; el script usa el entorno `production` fijo. Tras el export fuerza `APP_PRODUCT=prevencion`. Claves típicas: `ADMIN_AGENT_SECRET`, `OPENROUTER_*`, `APP_PRODUCT`. Alinea `ADMIN_AGENT_*` en Symfony (`current/.env`) con el mismo secreto y uvicorn.
 
 En la VM: remoto `git@github.com:…` (SSH a GitHub) y, si aplica, `sudo` para el servicio. El script hace `reset --hard` a `origin` (pierde divergencias y cambios locales *trackeados* en el server). **Node.js + npm** deben existir en el `PATH` del usuario de deploy: tras cada deploy se ejecuta `npm ci` (o `install`) y **`npm run build`** en el directorio Symfony (`portal/`, o `current/` si es tu layout) para generar `public/build/manifest.json` (no se versiona; sin esto, error 500 en twig/encore). `node-sass` usa **node-gyp**: hace falta **Python 3** (`apt install python3` en Debian) y, para compilar, `build-essential` (`make`/`g++`). El repositorio incluye `portal/.npmrc` con `python=python3` y el script exporta `PYTHON` por si el binario `python` no existe.
 

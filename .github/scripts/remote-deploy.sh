@@ -61,6 +61,12 @@ if command -v sudo >/dev/null 2>&1; then
 fi
 git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/${BRANCH}"
 git reset --hard "origin/${BRANCH}"
+
+# admin_agent/.env desde Infisical (INFISICAL_TOKEN vía CI; ver CICD-SETUP)
+if [ -f "$TOP/.github/scripts/infisical-admin-agent-env.sh" ]; then
+  bash "$TOP/.github/scripts/infisical-admin-agent-env.sh" "$TOP" || exit 1
+fi
+
 # Webpack Encore: public/build/ en .gitignore. El vhost a menudo apunta a current/; hay que
 # construir en *cada* ruta con package.json (current antes que portal), sin duplicar misma ruta (realpath).
 # Webpack/Encore con Dart Sass (paquete "sass") no requiere node-gyp; dejamos python por si otro módulo lo pide

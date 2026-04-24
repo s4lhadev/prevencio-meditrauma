@@ -37,6 +37,7 @@ jobs:
       - name: Remote deploy
         env:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER }}
+          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
         run: |
           set -e
           P="${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH }}"
@@ -49,4 +50,7 @@ jobs:
           BR="${{ github.ref_name }}"
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts \
             "$U@${{ secrets.DEPLOY_HOST }}" \
+            env \
+              "INFISICAL_TOKEN=${INFISICAL_TOKEN:-}" \
+              "APP_PRODUCT_OVERRIDE=prevencion" \
             bash -s "$P" "$REPO" "$BR" < .github/scripts/remote-deploy.sh
