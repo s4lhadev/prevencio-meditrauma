@@ -1,5 +1,7 @@
 {
     "devDependencies": {
+        "@babel/core": "7.8.3",
+        "@babel/preset-env": "7.8.3",
         "@symfony/webpack-encore": "^0.28.3",
         "core-js": "^3.0.0",
         "regenerator-runtime": "^0.13.2",
@@ -8,6 +10,9 @@
         "sass-loader": "^7.3.1",
         "webpack": "^4.41.5",
         "webpack-notifier": "^1.8.0"
+    },
+    "overrides": {
+        "@babel/helper-compilation-targets": "7.8.3"
     },
     "license": "UNLICENSED",
     "private": true,
