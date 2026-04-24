@@ -1,0 +1,4 @@
+# Set ADMIN_AGENT_INTERNAL_URL and ADMIN_AGENT_SECRET in .env (see .env.dist)
+parameters:
+    admin_agent.internal_url: '%env(ADMIN_AGENT_INTERNAL_URL)%'
+    admin_agent.secret: '%env(ADMIN_AGENT_SECRET)%'

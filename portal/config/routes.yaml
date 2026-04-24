@@ -1,3 +1,24 @@
+# Antes que Sonata /admin — asistente IA (ver admin_agent/README.md)
+admin_asistente:
+    path: /admin/asistente
+    controller: App\Controller\AdminAsistenteController::index
+    methods: GET
+
+admin_asistente_chat:
+    path: /admin/asistente/chat
+    controller: App\Controller\AdminAsistenteController::chat
+    methods: POST
+
+admin_asistente_index_status:
+    path: /admin/asistente/index-status
+    controller: App\Controller\AdminAsistenteController::indexStatus
+    methods: GET
+
+admin_asistente_reindex:
+    path: /admin/asistente/reindex
+    controller: App\Controller\AdminAsistenteController::reindex
+    methods: POST
+
 dashboard:
     path: /
     controller: App\Controller\HomeController::index

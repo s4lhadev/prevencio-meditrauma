@@ -49,6 +49,10 @@ composer.phar
 # Build
 /public/build/
 
+# admin_agent (Python, portal)
+portal/admin_agent/.venv/
+portal/admin_agent/.codebase_index.sqlite
+
 # Vendor (no subir dependencias)
 **/vendor/
 

@@ -1,0 +1,49 @@
+# GitHub Actions → Tailscale → SSH. Ver .github/CICD-SETUP.md
+name: Deploy (Tailscale + SSH)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prevencion
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+          ping: ${{ secrets.DEPLOY_HOST }}
+
+      - name: Add SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          { ssh-keygen -F "${{ secrets.DEPLOY_HOST }}" -f ~/.ssh/known_hosts >/dev/null 2>&1; } || \
+            ssh-keyscan -T 30 "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Remote deploy
+        env:
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          set -e
+          P="${{ vars.DEPLOY_PATH }}"
+          if [ -z "$P" ] || [ "$P" = "SET_ME" ]; then
+            echo "Define la variable de repositorio DEPLOY_PATH (ruta al clone: raíz del repo o a portal/; el script resuelve el toplevel con git)"
+            exit 1
+          fi
+          U="${DEPLOY_USER:-administrador}"
+          REPO="${{ github.server_url }}/${{ github.repository }}.git"
+          BR="${{ github.ref_name }}"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "$U@${{ secrets.DEPLOY_HOST }}" \
+            bash -s "$P" "$REPO" "$BR" < .github/scripts/remote-deploy.sh
