@@ -33,12 +33,12 @@ jobs:
 
       - name: Remote deploy
         env:
-          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER }}
         run: |
           set -e
-          P="${{ vars.DEPLOY_PATH }}"
+          P="${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH }}"
           if [ -z "$P" ] || [ "$P" = "SET_ME" ]; then
-            echo "Define la variable de repositorio DEPLOY_PATH (ruta al clone: raíz del repo o a portal/; el script resuelve el toplevel con git)"
+            echo "Define DEPLOY_PATH: Repository secret o variable (Settings → Actions → Secrets/Variables)"
             exit 1
           fi
           U="${DEPLOY_USER:-administrador}"

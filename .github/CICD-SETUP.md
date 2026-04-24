@@ -10,12 +10,7 @@ Misma idea que en Medisalut: el runner entra al tailnet, luego **SSH** a la VM (
 | `DEPLOY_HOST` | IP o hostname en Tailscale (p. ej. `100.77.237.64`) |
 | `DEPLOY_SSH_PRIVATE_KEY` | Clave **privada** del usuario de deploy |
 
-**Variables**:
-
-| Variable | Ejemplo | Uso |
-|----------|---------|-----|
-| `DEPLOY_PATH` | `/var/www/prevencio-meditrauma` o la ruta al directorio `portal` | El script hace `git` en el *toplevel* del clone (vía `git rev-parse`) e instala en `portal/admin_agent` |
-| `DEPLOY_USER` | `administrador` | Opcional; por defecto `administrador` |
+**`DEPLOY_PATH` y `DEPLOY_USER`:** en *Secrets* **o** en *Variables* (mismo nombre). Si solo los tienes en *Secrets*, el workflow los usa (antes solo se leía la pestaña *Variables*).
 
 En la VM: el usuario debe poder `git pull` (deploy key o token) y, si aplica, `sudo systemctl restart prevencion-admin-agent`.
 
