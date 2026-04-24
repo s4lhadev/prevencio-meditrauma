@@ -76,7 +76,19 @@ if command -v npm >/dev/null 2>&1; then
     r="$(readlink -f "$d" 2>/dev/null || echo "$d")"
     case "$SEEN" in *" ${r} "*) continue ;; esac
     SEEN="${SEEN}${r} "
-    (cd "$d" && (npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund) && npm run build) || {
+    (cd "$d" && {
+      if [ -f package-lock.json ]; then
+        if ! npm ci --no-audit --no-fund; then
+          echo "ERROR: npm ci falló en $d. Suele deberse a: npm<7 con lock v3, o lock no commiteado/actualizado."
+          echo "En la VM: node -v; npm -v; (npm 7+ o actualiza: sudo npm i -g npm@9)"
+          exit 1
+        fi
+      else
+        echo "Aviso: no hay package-lock.json en $d — npm install puede traer Babel 7.2x y romper Encore. Genera y sube el lock."
+        npm install --no-audit --no-fund
+      fi
+      npm run build
+    }) || {
       echo "ERROR: npm run build falló en $d (realpath: $r)"
       exit 1
     }
