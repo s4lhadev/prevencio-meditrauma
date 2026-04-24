@@ -8,7 +8,7 @@ Misma idea que en Medisalut: el runner entra al tailnet, luego **SSH** a la VM (
 |--------|------------|
 | `TAILSCALE_AUTHKEY` | `tskey-auth-...` (o usa OAuth con tags, ver [tailscale/github-action](https://github.com/tailscale/github-action)) |
 | `DEPLOY_HOST` | IP o hostname en Tailscale (p. ej. `100.77.237.64`) |
-| `DEPLOY_SSH_PRIVATE_KEY` | Clave **privada** del usuario de deploy |
+| `DEPLOY_SSH_PRIVATE_KEY` | Clave **privada** (completa, sin contraseña en el fichero; ver sección SSH en `medisalut/.github/CICD-SETUP.md` si falla *libcrypto*) |
 
 **`DEPLOY_PATH` y `DEPLOY_USER`:** en *Secrets* **o** en *Variables* (mismo nombre). Si solo los tienes en *Secrets*, el workflow los usa (antes solo se leía la pestaña *Variables*).
 

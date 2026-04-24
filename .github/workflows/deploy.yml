@@ -24,10 +24,13 @@ jobs:
           ping: ${{ secrets.DEPLOY_HOST }}
 
       - name: Add SSH key
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1 || { echo "::error::La clave privada no carga (formato PEM/OpenSSH, sin contraseña, copia completa BEGIN…END)"; exit 1; }
           { ssh-keygen -F "${{ secrets.DEPLOY_HOST }}" -f ~/.ssh/known_hosts >/dev/null 2>&1; } || \
             ssh-keyscan -T 30 "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
@@ -44,6 +47,6 @@ jobs:
           U="${DEPLOY_USER:-administrador}"
           REPO="${{ github.server_url }}/${{ github.repository }}.git"
           BR="${{ github.ref_name }}"
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts \
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts \
             "$U@${{ secrets.DEPLOY_HOST }}" \
             bash -s "$P" "$REPO" "$BR" < .github/scripts/remote-deploy.sh
