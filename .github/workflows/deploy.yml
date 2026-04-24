@@ -45,7 +45,7 @@ jobs:
             exit 1
           fi
           U="${DEPLOY_USER:-administrador}"
-          REPO="${{ github.server_url }}/${{ github.repository }}.git"
+          REPO="git@github.com:${{ github.repository }}.git"
           BR="${{ github.ref_name }}"
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts \
             "$U@${{ secrets.DEPLOY_HOST }}" \

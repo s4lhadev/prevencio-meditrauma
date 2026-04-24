@@ -12,6 +12,6 @@ Misma idea que en Medisalut: el runner entra al tailnet, luego **SSH** a la VM (
 
 **`DEPLOY_PATH` y `DEPLOY_USER`:** en *Secrets* **o** en *Variables* (mismo nombre). Si solo los tienes en *Secrets*, el workflow los usa (antes solo se leía la pestaña *Variables*).
 
-En la VM: el usuario debe poder `git pull` (deploy key o token) y, si aplica, `sudo systemctl restart prevencion-admin-agent`.
+En la VM: remoto `git@github.com:…` (SSH a GitHub) y, si aplica, `sudo` para el servicio. El script hace `reset --hard` a `origin` (pierde divergencias y cambios locales *trackeados* en el server).
 
 **Probar:** *Actions* → *Deploy (Tailscale + SSH)* → *Run workflow*.

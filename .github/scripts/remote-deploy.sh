@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Ejecuta en la VM: bash -s < remote-deploy.sh -- DEPLOY_DIR REPO_URL BRANCH
 # DEPLOY_DIR: raíz del repo (donde está .git) o la carpeta portal/ (se detecta el toplevel con git)
+# Alinea con origin/BRANCH (reset --hard en servidor: ver medisalut remote-deploy.sh)
 set -euo pipefail
 START="${1:-}"
 REPO_URL="${2:-}"
@@ -21,9 +22,13 @@ else
   cd "$TOP"
 fi
 git remote set-url origin "$REPO_URL" 2>/dev/null || true
-git fetch origin
-git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/$BRANCH" || true
-git pull --ff-only origin "$BRANCH"
+git fetch --prune origin
+if ! git show-ref --verify --quiet "refs/remotes/origin/${BRANCH}"; then
+  echo "No existe origin/${BRANCH} tras el fetch. ¿La rama está en GitHub?"
+  exit 1
+fi
+git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/${BRANCH}"
+git reset --hard "origin/${BRANCH}"
 if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
   (cd portal/admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
