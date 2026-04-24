@@ -29,8 +29,8 @@
 .DS_Store
 Thumbs.db
 
-# Node
-/node_modules/
+# Node (sin / inicial: aplica a portal/, current/, etc.)
+node_modules/
 /public/build/
 
 # Cache

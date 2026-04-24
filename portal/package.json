@@ -2,18 +2,19 @@
     "devDependencies": {
         "@symfony/webpack-encore": "^0.28.3",
         "core-js": "^3.0.0",
-        "node-sass": "^4.13.0",
         "regenerator-runtime": "^0.13.2",
-        "sass-loader": "^8.0.2",
+        "cross-env": "^7.0.3",
+        "sass": "^1.32.0",
+        "sass-loader": "^7.3.1",
         "webpack": "^4.41.5",
         "webpack-notifier": "^1.8.0"
     },
     "license": "UNLICENSED",
     "private": true,
     "scripts": {
-        "dev-server": "encore dev-server",
-        "dev": "encore dev",
-        "watch": "encore dev --watch",
-        "build": "encore production --progress"
+        "dev-server": "cross-env NODE_OPTIONS=--openssl-legacy-provider encore dev-server",
+        "dev": "cross-env NODE_OPTIONS=--openssl-legacy-provider encore dev",
+        "watch": "cross-env NODE_OPTIONS=--openssl-legacy-provider encore dev --watch",
+        "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider encore production --progress"
     }
 }

@@ -53,8 +53,10 @@ Encore
         config.corejs = 3;
     })
 
-    // enables Sass/SCSS support
-    .enableSassLoader()
+    // Dart Sass (paquete "sass") — evita node-sass/node-gyp (Python2 + libsass) en el servidor
+    .enableSassLoader((options) => {
+        options.implementation = require('sass');
+    })
 
     // uncomment if you use TypeScript
     //.enableTypeScriptLoader()
