@@ -15,15 +15,11 @@ Encore
     //.setManifestKeyPrefix('build/')
 
     /*
-     * ENTRY CONFIG
-     *
-     * Add 1 entry for each "page" of your app
-     * (including one that's included on every page - e.g. "app")
-     *
-     * Each entry will result in one JavaScript file (e.g. app.js)
-     * and one CSS file (e.g. app.css) if your JavaScript imports CSS.
+     * Entrada solo SCSS: evita babel-loader en app.js (Babel 7.2x + Webpack4 + Node 18
+     * daban ERR_PACKAGE_PATH_NOT_EXPORTED en @babel/helper-compilation-targets en el deploy).
+     * Si más adelante necesitas JS, añade otra entry o reintroduce app.js y fija Babel 7.8.
      */
-    .addEntry('app', './assets/js/app.js')
+    .addEntry('app', './assets/css/app.scss')
     //.addEntry('page1', './assets/js/page1.js')
     //.addEntry('page2', './assets/js/page2.js')
 
