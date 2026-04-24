@@ -21,6 +21,19 @@ else
   fi
   cd "$TOP"
 fi
+
+# git por SSH a github.com: actualizar known_hosts (evita "Host key verification failed")
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh" 2>/dev/null || true
+touch "$HOME/.ssh/known_hosts"
+ssh-keygen -R 'github.com' -f "$HOME/.ssh/known_hosts" 2>/dev/null || true
+ssh-keygen -R '[github.com]:22' -f "$HOME/.ssh/known_hosts" 2>/dev/null || true
+ssh-keyscan -T 25 -t ed25519,ecdsa,rsa github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null || {
+  echo "No se pudo ssh-keyscan github.com; revisa DNS/salida a internet en la VM"
+  exit 1
+}
+export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+
 git remote set-url origin "$REPO_URL" 2>/dev/null || true
 git fetch --prune origin
 if ! git show-ref --verify --quiet "refs/remotes/origin/${BRANCH}"; then
