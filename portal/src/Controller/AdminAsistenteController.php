@@ -8,8 +8,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 /**
- * Asistente IA bajo /admin/asistente — proxy a admin_agent/ (local).
- * Rutas en config/routes.yaml (antes de Sonata).
+ * Asistente IA bajo /agent — proxy a admin_agent/ (local). Rutas en config/routes.yaml.
  *
  * @IsGranted("ROLE_ADMIN")
  */

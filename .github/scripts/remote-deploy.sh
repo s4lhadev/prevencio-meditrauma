@@ -32,7 +32,19 @@ ssh-keyscan -T 25 -t ed25519,ecdsa,rsa github.com >> "$HOME/.ssh/known_hosts" 2>
   echo "No se pudo ssh-keyscan github.com; revisa DNS/salida a internet en la VM"
   exit 1
 }
-export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+GH_KEY=""
+for f in "$HOME/.ssh/github_deploy" "$HOME/.ssh/mdt_debian" "$HOME/.ssh/id_ed25519" "$HOME/.ssh/id_rsa"; do
+  [ -f "$f" ] || continue
+  GH_KEY="$f"
+  break
+done
+if [ -n "$GH_KEY" ]; then
+  # shellcheck disable=SC2139
+  export GIT_SSH_COMMAND="ssh -i $GH_KEY -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+else
+  export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+  echo "Aviso: no hay ~/.ssh/{github_deploy,mdt_debian,id_ed25519,id_rsa}; fallará si no configuras una clave para Git."
+fi
 
 git remote set-url origin "$REPO_URL" 2>/dev/null || true
 git fetch --prune origin
@@ -40,8 +52,30 @@ if ! git show-ref --verify --quiet "refs/remotes/origin/${BRANCH}"; then
   echo "No existe origin/${BRANCH} tras el fetch. ¿La rama está en GitHub?"
   exit 1
 fi
+# Si php/nginx escribió en portal/public/ como www-data, git no puede "unlink" sin ser dueño
+if command -v sudo >/dev/null 2>&1; then
+  sudo -n chown -R "$(id -u -n):$(id -g -n)" "$TOP" 2>/dev/null || {
+    echo "Falta poder hacer chown del árbol (p. ej. sudo sin contraseña) o ejecuta UNA VEZ en el servidor:"
+    echo "  sudo chown -R $(id -u -n):$(id -g -n) $TOP"
+  }
+fi
 git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/${BRANCH}"
 git reset --hard "origin/${BRANCH}"
+# Webpack Encore: public/build/ está en .gitignore; hace falta "npm run build" en el servidor
+NPM_DIR=""
+for d in "$TOP/portal" "$TOP/current" "$TOP"; do
+  [ -f "$d/package.json" ] && [ -d "$d/public" ] && { NPM_DIR="$d"; break; }
+done
+if [ -n "$NPM_DIR" ]; then
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "Aviso: $NPM_DIR/package.json pero no hay 'npm' en el PATH. Instala Node o ejecuta: (cd $NPM_DIR && npm ci && npm run build)"
+  else
+    (cd "$NPM_DIR" && (npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund) && npm run build) || {
+      echo "ERROR: npm run build falló en $NPM_DIR"
+      exit 1
+    }
+  fi
+fi
 if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
   (cd portal/admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
@@ -54,5 +88,13 @@ elif [ -f bin/console ]; then
 fi
 if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
   sudo systemctl restart prevencion-admin-agent || true
+fi
+# var/ (Symfony: log, caché) — www-data; enlaces p. ej. current/ hacia un release
+WEB_USER="${DEPLOY_WEB_USER:-www-data}"
+if command -v sudo >/dev/null 2>&1; then
+  for v in "$TOP/current/var" "$TOP/portal/var" "$TOP/var"; do
+    [ -d "$v" ] || continue
+    sudo -n chown -R "$WEB_USER:$WEB_USER" "$v" 2>/dev/null || true
+  done
 fi
 echo "OK deploy prevencion $TOP"

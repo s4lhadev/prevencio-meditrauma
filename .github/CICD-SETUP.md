@@ -12,6 +12,10 @@ Misma idea que en Medisalut: el runner entra al tailnet, luego **SSH** a la VM (
 
 **`DEPLOY_PATH` y `DEPLOY_USER`:** en *Secrets* **o** en *Variables* (mismo nombre). Si solo los tienes en *Secrets*, el workflow los usa (antes solo se leía la pestaña *Variables*).
 
-En la VM: remoto `git@github.com:…` (SSH a GitHub) y, si aplica, `sudo` para el servicio. El script hace `reset --hard` a `origin` (pierde divergencias y cambios locales *trackeados* en el server).
+En la VM: remoto `git@github.com:…` (SSH a GitHub) y, si aplica, `sudo` para el servicio. El script hace `reset --hard` a `origin` (pierde divergencias y cambios locales *trackeados* en el server). **Node.js + npm** deben existir en el `PATH` del usuario de deploy: tras cada deploy se ejecuta `npm ci` (o `install`) y **`npm run build`** en el directorio Symfony (`portal/`, o `current/` si es tu layout) para generar `public/build/manifest.json` (no se versiona; sin esto, error 500 en twig/encore).
+
+**Si el deploy falla con `unable to unlink … Permission denied`:** suele ser que bajo `portal/public/` (o similar) haya archivos de **otro usuario** (p. ej. `www-data`). **Una vez** en el servidor, como root: `sudo chown -R administrador:administrador <DEPLOY_PATH>`. El script intenta el mismo `chown` con `sudo -n` (requiere que `administrador` pueda usar `sudo` a ese path sin contraseña, o el comando manual sigue haciendo falta al menos una vez.
+
+**Tras el deploy, HTTP 500 en `var/log` (*Permission denied*):** el script deja `var/` (p. ej. `portal/var`, `current/var`) con dueño `www-data` al final. Si aún falla, en el servidor: `sudo chown -R www-data:www-data` sobre esas carpetas. En **producción** usa `APP_ENV=prod` (no `dev.log`); el `.env` en el server no se commitea.
 
 **Probar:** *Actions* → *Deploy (Tailscale + SSH)* → *Run workflow*.

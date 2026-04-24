@@ -1,6 +1,6 @@
 # Prevención — asistente admin (local API)
 
-El panel en `/admin/asistente` hace de proxy a este servicio en **127.0.0.1** (no exponer a internet).
+El panel en `/agent` hace de proxy a este servicio en **127.0.0.1** (no exponer a internet).
 
 **Producción:** [DEPLOY.md](DEPLOY.md) y `systemd/prevencion-admin-agent.service.example`.
 
