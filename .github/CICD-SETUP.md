@@ -18,4 +18,6 @@ En la VM: remoto `git@github.com:…` (SSH a GitHub) y, si aplica, `sudo` para e
 
 **Tras el deploy, HTTP 500 en `var/log` (*Permission denied*):** el script deja `var/` (p. ej. `portal/var`, `current/var`) con dueño `www-data` al final. Si aún falla, en el servidor: `sudo chown -R www-data:www-data` sobre esas carpetas. En **producción** usa `APP_ENV=prod` (no `dev.log`); el `.env` en el server no se commitea.
 
+**Falta `public/build/manifest.json` (Webpack):** el build debe ejecutarse en el **mismo** directorio que el docroot; si Nginx/Apache apunta a `.../current/public` y en el clone solo hay `portal/`, deja alineado con `cd /ruta/prevencio && ln -sfn portal current`. El script ahora hace `npm run build` en `current/` (primero) y en `portal/`, sin duplicar la misma ruta real. Si aún no hay manifiesto, en la VM: `(cd ruta-symfony && npm ci && npm run build)`.
+
 **Probar:** *Actions* → *Deploy (Tailscale + SSH)* → *Run workflow*.

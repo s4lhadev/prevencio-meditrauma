@@ -61,30 +61,43 @@ if command -v sudo >/dev/null 2>&1; then
 fi
 git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/${BRANCH}"
 git reset --hard "origin/${BRANCH}"
-# Webpack Encore: public/build/ está en .gitignore; hace falta "npm run build" en el servidor
-NPM_DIR=""
-for d in "$TOP/portal" "$TOP/current" "$TOP"; do
-  [ -f "$d/package.json" ] && [ -d "$d/public" ] && { NPM_DIR="$d"; break; }
-done
-if [ -n "$NPM_DIR" ]; then
-  if ! command -v npm >/dev/null 2>&1; then
-    echo "Aviso: $NPM_DIR/package.json pero no hay 'npm' en el PATH. Instala Node o ejecuta: (cd $NPM_DIR && npm ci && npm run build)"
-  else
-    (cd "$NPM_DIR" && (npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund) && npm run build) || {
-      echo "ERROR: npm run build falló en $NPM_DIR"
+# Webpack Encore: public/build/ en .gitignore. El vhost a menudo apunta a current/; hay que
+# construir en *cada* ruta con package.json (current antes que portal), sin duplicar misma ruta (realpath).
+NPM_BUILT=0
+SEEN=" "
+if command -v npm >/dev/null 2>&1; then
+  for d in "$TOP/current" "$TOP/portal" "$TOP"; do
+    [ -f "$d/package.json" ] && [ -d "$d/public" ] || continue
+    r="$(readlink -f "$d" 2>/dev/null || echo "$d")"
+    case "$SEEN" in *" ${r} "*) continue ;; esac
+    SEEN="${SEEN}${r} "
+    (cd "$d" && (npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund) && npm run build) || {
+      echo "ERROR: npm run build falló en $d (realpath: $r)"
       exit 1
     }
+    NPM_BUILT=$((NPM_BUILT + 1))
+  done
+  if [ "$NPM_BUILT" -eq 0 ]; then
+    echo "Aviso: no se ejecutó 'npm run build' (falta package.json+public bajo $TOP/current, $TOP/portal o $TOP?)"
   fi
+else
+  for d in "$TOP/current" "$TOP/portal" "$TOP"; do
+    if [ -f "$d/package.json" ]; then
+      echo "Aviso: hace falta 'npm' en el PATH para generar public/build/ en $d"
+    fi
+  done
 fi
 if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
   (cd portal/admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
   (cd admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
 fi
-if [ -f portal/bin/console ]; then
-  (cd portal && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
-elif [ -f bin/console ]; then
-  php bin/console cache:clear --env=prod --no-warmup 2>/dev/null || true
+if [ -f "$TOP/current/bin/console" ]; then
+  (cd "$TOP/current" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
+elif [ -f "$TOP/portal/bin/console" ]; then
+  (cd "$TOP/portal" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
+elif [ -f "$TOP/bin/console" ]; then
+  (cd "$TOP" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
 fi
 if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
   sudo systemctl restart prevencion-admin-agent || true
