@@ -23,11 +23,6 @@ class HomeController extends AbstractController
             return $this->redirectToRoute('change_password_otic');
         }
         $rol = $user->getRol();
-        if ($rol === null) {
-            // Si el usuario no tiene rol asignado, redirigir a una página de error o asignar un rol por defecto
-            $this->addFlash('error', 'No tienes un rol asignado. Por favor, contacta con el administrador.');
-            return $this->redirectToRoute('fos_user_security_logout');
-        }
         $rolId = $rol->getId();
 
         $id = $usuario->getId();
@@ -403,7 +398,7 @@ class HomeController extends AbstractController
 
     function revisionesPendientesFacturar()
     {
-        $query = "select a.id, DATE_FORMAT(a.fecha, '%d/%m/%Y') as fecha, DATE_FORMAT(a.fecha, '%Y%m%d%H%i') as fechatimestamp, b.nombre as trabajador, b.dni, c.descripcion as puesto, d.empresa, a.apto_id, a.fichero_id, e.descripcion as doctor, g.descripcion as agenda, a.fichero_resumen_id, a.aptitud_enviada, a.estado_id, a.pruebas_complementarias from revision a
+        $query = "select a.id, to_char(a.fecha, 'DD/MM/YYYY') as fecha, to_char(a.fecha, 'YYYYMMDDHHmm') as fechatimestamp, b.nombre as trabajador, b.dni, c.descripcion as puesto, d.empresa, a.apto_id, a.fichero_id, e.descripcion as doctor, g.descripcion as agenda, a.fichero_resumen_id, a.aptitud_enviada, a.estado_id, a.pruebas_complementarias from revision a
         inner join trabajador b on a.trabajador_id = b.id
         inner join puesto_trabajo_centro c on a.puesto_trabajo_id = c.id
         inner join empresa d on a.empresa_id = d.id

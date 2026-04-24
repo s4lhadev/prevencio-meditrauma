@@ -55,7 +55,7 @@ class Tecnico
     private $porcComision;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;
@@ -74,37 +74,37 @@ class Tecnico
     private $correo;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $tecnico = false;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $vigilanciaSalud = false;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $gestorAdministrativo = false;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $due = false;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $agente = false;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $administracion = false;

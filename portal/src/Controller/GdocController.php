@@ -234,8 +234,14 @@ class GdocController extends AbstractController
                     $revision->getTrabajador()->getDni() . '_' .
                     $hoyString . '.zip';
 
+                $zipDir = $this->getParameter('kernel.project_dir') . '/upload/media/ziprevision/';
+                if (!is_dir($zipDir)) {
+                    mkdir($zipDir, 0775, true);
+                }
+                $zipPath = $zipDir . $nombreZip;
+
                 $zip = new ZipArchive();
-                if ($zip->open('upload/media/ziprevision/' . $nombreZip, ZipArchive::CREATE) === TRUE) {
+                if ($zip->open($zipPath, ZipArchive::CREATE) === TRUE) {
                     // Convertimos el pdf en imagenes
                     $filePng = str_replace('docx', 'png', $fileDocx);
                     $this->convertPdfToImage($filePdf, $filePng);
@@ -253,7 +259,7 @@ class GdocController extends AbstractController
                     }
                     $zip->close();
                 }
-                $response = new Response(file_get_contents('upload/media/ziprevision/' . $nombreZip));
+                $response = new Response(file_get_contents($zipPath));
 
                 $disposition = $response->headers->makeDisposition(
                     ResponseHeaderBag::DISPOSITION_ATTACHMENT,
@@ -336,8 +342,14 @@ class GdocController extends AbstractController
         $empresaNombre = $this->eliminar_tildes($empresa->getEmpresa());
         $nombreZip = 'APTITUDES ' . $empresaNombre . '_' . $hoyString . '.zip';
 
+        $zipDir = $this->getParameter('kernel.project_dir') . '/upload/media/zipaptitud/';
+        if (!is_dir($zipDir)) {
+            mkdir($zipDir, 0775, true);
+        }
+        $zipPath = $zipDir . $nombreZip;
+
         $zip = new ZipArchive();
-        if ($zip->open('upload/media/zipaptitud/' . $nombreZip, ZipArchive::CREATE) === TRUE) {
+        if ($zip->open($zipPath, ZipArchive::CREATE) === TRUE) {
             foreach ($revisionesSelectArray as $rs) {
                 $revision = $em->getRepository('App\Entity\Revision')->find($rs);
                 $fichero = $revision->getFichero();
@@ -393,7 +405,7 @@ class GdocController extends AbstractController
             }
             $zip->close();
         }
-        $response = new Response(file_get_contents('upload/media/zipaptitud/' . $nombreZip));
+        $response = new Response(file_get_contents($zipPath));
 
         $response->headers->set('Content-Type', 'application/zip');
         $response->headers->set('Content-Disposition', 'attachment; filename="' . $nombreZip . '"');

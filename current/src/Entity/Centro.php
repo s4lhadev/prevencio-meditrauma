@@ -124,7 +124,7 @@ class Centro
 	private $fax;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $actividadCentro;
@@ -181,31 +181,31 @@ class Centro
     private $empresa;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $estructuraCentro;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $actuaciones;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $avisosControl;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $historicoPrevenet = false;

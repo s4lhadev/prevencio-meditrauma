@@ -25,103 +25,103 @@ class Epi
     private $descripcion;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoDefEpi;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoComponents;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoRequisits;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoInsUtil;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoInsMant;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoInstMont;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoInstMag;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoInsNet;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoDisseny;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoRiscSol;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoPotencial;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $infoAdicional;
 
     /**
-     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $empresa = false;
 
     /**
-     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $trabajador = false;
 
     /**
-     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $anulado = false;
 
     /**
-     * @ORM\Column(type="string", length=20000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $descripcionCa;
 
     /**
-     * @ORM\Column(type="string", length=20000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $descripcionEs;

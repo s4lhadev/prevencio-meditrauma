@@ -140,43 +140,43 @@ class Trabajador
 	private $exclusion;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $avisosControl;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $domicilio;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $telefono1;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $telefono2;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $mail;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $observaciones;
@@ -188,7 +188,7 @@ class Trabajador
     private $idPrevenet;
 
     /**
-     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $historicoPrevenet = false;

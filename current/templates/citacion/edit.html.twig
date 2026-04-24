@@ -25,7 +25,9 @@
                     <a href="{{ path('medico_revision_update', { "id": revisionId }) }}" target="_blank" class="btn btn-labeled btn-labeled-left bg-primary">{% trans from 'revision' %}TRANS_MODIFICAR_REVISION{% endtrans %}<b><i class="icon-plus3"></i></b></a>
                 {% else %}
                     {% if app.request.get('id') is defined and app.request.get('id') is not empty %}
-                        <a href="{{ path('medico_revision_add') }}?empresaId={{ empresaId }}&trabajadorId={{ trabajadorId }}&citacionId={{ app.request.get('id') }}" target="_blank" class="btn btn-labeled btn-labeled-left bg-primary">{% trans from 'revision' %}TRANS_CREAR_REVISION{% endtrans %}<b><i class="icon-plus3"></i></b></a>
+                        {% if form.vars.value.estado is not null and form.vars.value.estado.id in [2, 3, 7] %}
+                            <a href="{{ path('medico_revision_add') }}?empresaId={{ empresaId }}&trabajadorId={{ trabajadorId }}&citacionId={{ app.request.get('id') }}" target="_blank" class="btn btn-labeled btn-labeled-left bg-primary">{% trans from 'revision' %}TRANS_CREAR_REVISION{% endtrans %}<b><i class="icon-plus3"></i></b></a>
+                        {% endif %}
                     {% endif %}
                 {% endif %}
             {% endif %}

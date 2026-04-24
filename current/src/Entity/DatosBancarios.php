@@ -45,19 +45,19 @@ class DatosBancarios
     private $oficina;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $numCuenta;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $direccion;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $localidad;
@@ -88,19 +88,19 @@ class DatosBancarios
 	private $pais;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $ibanDigital;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $ibanPapel;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $bic;
@@ -119,7 +119,7 @@ class DatosBancarios
 	private $diaPago;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;

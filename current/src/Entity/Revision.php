@@ -67,13 +67,13 @@ class Revision
     private $fechaCertificacion;
 
     /**
-     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $certificado = false;
 
     /**
-     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $informe = false;
@@ -85,31 +85,31 @@ class Revision
     private $restricciones;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $observacionMedico;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $observacionInterna;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $observaciones;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $conclusiones;
 
     /**
-     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $anulado = false;
@@ -129,7 +129,7 @@ class Revision
     private $estado;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $passwordPdf;
@@ -149,7 +149,7 @@ class Revision
     private $ficheroRevisionMedica;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $numeroPeticion;
@@ -175,13 +175,13 @@ class Revision
     private $aptitudRestriccion;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $aptitudEnviada = false;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $token;
@@ -207,19 +207,19 @@ class Revision
     private $pruebasComplementarias;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $telefono;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $analitica = false;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $recomendaciones;
@@ -250,13 +250,13 @@ class Revision
     private $fechaEnvio;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $usuarioFirma;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $numeroPeticionVerificacion;

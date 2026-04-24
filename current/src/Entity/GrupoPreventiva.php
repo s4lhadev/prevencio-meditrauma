@@ -31,25 +31,25 @@ class GrupoPreventiva
     private $codigo;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $observaciones;
 
     /**
-     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $anulado = false;
 
     /**
-     * @ORM\Column(type="string", length=20000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $descripcionCa;
 
     /**
-     * @ORM\Column(type="string", length=20000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $descripcionEs;

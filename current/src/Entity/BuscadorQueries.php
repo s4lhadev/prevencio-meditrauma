@@ -25,7 +25,7 @@ class BuscadorQueries
     private $dtcrea;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $nombre;
@@ -37,13 +37,13 @@ class BuscadorQueries
     private $compartida = false;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $restricciones;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $restriccionesSql;

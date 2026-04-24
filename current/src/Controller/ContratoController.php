@@ -927,7 +927,7 @@ class ContratoController extends AbstractController
                     b.localidad_fiscal,
                     ms.descripcion as municipio_serpa,
                     b.domicilio_fiscal,
-                    t3.nombre AS vigilante_salud,
+                    t3.nombre AS gestor,
                     ce3.correo,
                     b.codigo_postal_postal AS codigo_postal,
                     b.cif,
@@ -1222,7 +1222,7 @@ class ContratoController extends AbstractController
                 $filePdf = str_replace('docx', 'pdf', $fileDocx);
                 $outdir = $rutaCompleta . $carpetaGenerada;
 
-                $cmd = 'soffice --headless --convert-to pdf:writer_pdf_Export "' . $fileDocx . '" --outdir "' . $outdir . '"';
+                $cmd = 'HOME=/tmp /usr/bin/soffice --headless --convert-to pdf:writer_pdf_Export "' . $fileDocx . '" --outdir "' . $outdir . '"';
                 exec($cmd);
 
                 // Encriptamos el documento

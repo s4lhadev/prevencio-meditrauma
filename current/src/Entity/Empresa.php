@@ -446,7 +446,7 @@ class Empresa
 	private $personaContacto;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;
@@ -476,7 +476,7 @@ class Empresa
     private $codigoTecnico;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $historicoPrevenet = false;
@@ -514,7 +514,7 @@ class Empresa
     private $idRiesgos;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $noAplicarIpc = false;
@@ -570,28 +570,28 @@ class Empresa
     private $procesoProductivo;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $pruebasEspeciales = false;
 
     /**
-     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $centroTrabajoDeslocalizado = false;
     /**
-     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $centroTrabajoDeslocalizadoConstruccio = false;
     /**
-     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $centroTrabajoTiene1 = false;
     /**
-     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $centroTrabajoTiene2 = false;

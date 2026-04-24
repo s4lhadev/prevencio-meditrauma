@@ -93,7 +93,7 @@ class HomeController extends AbstractController
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
-        $query = "select a.id, a.fichero_id, c.nombre from empresa_certificacion a inner join gdoc_fichero b on a.fichero_id = b.id inner join gdoc_plantillas c on b.plantilla_id = c.id where a.empresa_id = $empresaId";
+        $query = "select a.id, a.fichero_id, coalesce(c.nombre, b.nombre) as nombre from empresa_certificacion a inner join gdoc_fichero b on a.fichero_id = b.id and (b.anulado = false or b.anulado is null) left join gdoc_plantillas c on b.plantilla_id = c.id where a.empresa_id = $empresaId and a.enviada = true";
         $stmt = $this->getDoctrine()->getManager()->getConnection()->prepare($query);
         $stmt->execute();
         $certificaciones = $stmt->fetchAll();

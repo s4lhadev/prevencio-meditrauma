@@ -41,7 +41,7 @@ class RevisionRespuesta
     private $pregunta;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $respuesta;

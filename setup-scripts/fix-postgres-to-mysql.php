@@ -46,4 +46,3 @@ foreach ($files as $file) {
 echo "\nTotal files fixed: $totalFiles\n";
 echo "Total replacements: $totalReplacements\n";
 
-

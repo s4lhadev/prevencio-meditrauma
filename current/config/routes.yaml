@@ -837,6 +837,11 @@ gdoc_open_plantilla:
   path: /openPlantilla
   controller: App\Controller\GdocController::openPlantilla
 
+
+gdoc_serve_plantilla:
+  path: /servePlantilla
+  controller: App\Controller\GdocController::servePlantilla
+
 gdoc_down_plantilla:
   path: /downPlantilla
   controller: App\Controller\GdocController::downPlantilla

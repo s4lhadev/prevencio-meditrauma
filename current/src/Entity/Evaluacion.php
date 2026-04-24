@@ -58,13 +58,13 @@ class Evaluacion
     private $empresa;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $descripcion;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $anulado = false;
@@ -76,7 +76,7 @@ class Evaluacion
     private $tipo;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $finalizada = false;
@@ -89,7 +89,7 @@ class Evaluacion
     private $fichero;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $passwordPdf;

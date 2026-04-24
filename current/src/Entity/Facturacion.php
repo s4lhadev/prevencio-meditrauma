@@ -63,7 +63,7 @@ class Facturacion
 	private $formaPago;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $observaciones;
@@ -155,25 +155,25 @@ class Facturacion
 	private $serie;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $codigo;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anyo;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $numero;
 
 	/**
-	 * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;
@@ -193,7 +193,7 @@ class Facturacion
     private $facturaAsociada;
 
 	/**
-	 * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $enviada = false;
@@ -206,13 +206,13 @@ class Facturacion
     private $oldFactura;
 
     /**
-     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=2000, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $historico = false;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $passwordPdf;

@@ -33,7 +33,7 @@ class TecnicoEmpresa
 	private $empresa;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;

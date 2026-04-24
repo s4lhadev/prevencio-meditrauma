@@ -12,4 +12,3 @@ $content = str_replace(
 file_put_contents($file, $content);
 echo "Fixed AnaliticasController.php\n";
 
-

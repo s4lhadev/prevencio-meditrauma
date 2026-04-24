@@ -57,43 +57,43 @@ class GiroBancario
 	private $cuenta;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $girado = false;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $observaciones;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $manual = false;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $devolucion = false;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $comision = false;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $esFactura = false;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $pagoConfirmado = false;
@@ -106,13 +106,13 @@ class GiroBancario
 	private $remesa;
 
     /**
-     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $remesado = false;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;

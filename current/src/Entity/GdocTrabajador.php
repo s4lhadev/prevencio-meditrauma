@@ -33,7 +33,7 @@ class GdocTrabajador
     private $usuario;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $nombre;
@@ -59,7 +59,7 @@ class GdocTrabajador
     private $media;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $nombreCompleto;

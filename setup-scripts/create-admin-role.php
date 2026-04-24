@@ -65,4 +65,3 @@ echo "\n";
 echo "Rol ID: $roleId\n";
 echo "Usuario admin ahora tiene el rol 'Administrador' asignado.\n";
 
-

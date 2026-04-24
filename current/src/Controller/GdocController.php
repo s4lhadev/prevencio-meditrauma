@@ -361,31 +361,43 @@ class GdocController extends AbstractController
 
         $fileId = $_REQUEST['id'];
         $tipo = $_REQUEST['tipo'];
-
         switch ($tipo) {
-                // Plantillas
+                // Plantilla
             case 1:
                 $file = $em->getRepository('App\Entity\GdocPlantillas')->find($fileId);
+                $nombreFichero = $file->getNombreCompleto();
+                $rutaFichero = $rutaGestionDocumental . $plantillas . '/' . $nombreFichero;
                 break;
 
                 // Trabajador
             case 2:
+                $trabajadorId = $_REQUEST['trabajadorId'];
                 $file = $em->getRepository('App\Entity\GdocTrabajador')->find($fileId);
+                $nombreFichero = $file->getNombreCompleto();
+                $rutaFichero = $rutaGestionDocumental . $carpetaTrabajador . '/' . $trabajadorId . '/' . $nombreFichero;
                 break;
 
                 // Empresa
             case 3:
+                $empresaId = $_REQUEST['empresaId'];
                 $file = $em->getRepository('App\Entity\GdocEmpresa')->find($fileId);
+                $nombreFichero = $file->getNombreCompleto();
+                $rutaFichero = $rutaGestionDocumental . $carpetaEmpresa . '/' . $empresaId . '/' . $nombreFichero;
                 break;
         }
-        $file->setAnulado(true);
-        $em->persist($file);
-        $em->flush();
+        
+        $fileContent = file_get_contents($rutaFichero, true);
+        $response = new Response($fileContent);
+        
+        // Set proper content type for Collabora
+        $mimeType = mime_content_type($rutaFichero);
+        $response->headers->set('Content-Type', $mimeType ?: 'application/octet-stream');
+        $response->headers->set('Content-Disposition', 'inline; filename="' . $nombreFichero . '"');
+        $response->headers->set('Access-Control-Allow-Origin', '*');
+        $response->headers->set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type');
 
-        $data = array();
-        array_push($data, "OK");
-
-        return new JsonResponse($data);
+        return $response;
     }
 
     public function deleteFile(Request $request, TranslatorInterface $translator)
@@ -813,8 +825,8 @@ class GdocController extends AbstractController
         //Buscamos la configuración de la gestión documental
         $gdocConfig = $em->getRepository('App\Entity\GdocConfig')->find(1);
         $rutaGestionDocumental = $gdocConfig->getRuta();
-        $url = $gdocConfig->getUrl();
         $host = $gdocConfig->getHost();
+        $url = $gdocConfig->getUrl();
         $plantillas = $gdocConfig->getCarpetaPlantillas();
 
         $plantillaId = $_REQUEST['plantillaId'];
@@ -854,7 +866,7 @@ class GdocController extends AbstractController
         $logger->addLog($em, "open", $object, $usuario, TRUE);
         $em->flush();
 
-        return new RedirectResponse($url . '?file_path=file://' . $urlPlantilla . '&host=' . $host);
+        return new RedirectResponse($url . '?file_path=' . urlencode('https://app.mdtprevencion.com/servePlantilla?plantillaId=' . $plantillaId . '&tipo=' . $tipo) . '&storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=' . $host);
     }
 
     public function openFile(Request $request)
@@ -966,10 +978,10 @@ class GdocController extends AbstractController
             $em->flush();
 
             // RUTA LOCAL
-            // return new RedirectResponse($url.'?file_path=file://'.'C:\Users\david.jimenez\Desktop\Versiones codigo\CARPETAS PROVES LIBREOFFICE PREVENCIÓ\NOVA CARPETA'.'/'.$nombreFichero.'&host='.$host);
+            // return new RedirectResponse($url.'?file_path='.'C:\Users\david.jimenez\Desktop\Versiones codigo\CARPETAS PROVES LIBREOFFICE PREVENCIÓ\NOVA CARPETA'.'/'.$nombreFichero.'&host=storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=host='.$host);
 
             // RUTA PROD
-            return new RedirectResponse($url . '?file_path=file://' . $rutaGestionDocumental . $carpetaPlantillaGenerada . '/' . $nombreFichero . '&host=' . $host);
+            return new RedirectResponse($url . '?file_path=' . 'https://app.mdtprevencion.com/wopi/files/' . $carpetaPlantillaGenerada . '/' . $nombreFichero . '&host=storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=host=' . $host);
         }
     }
 
@@ -1094,10 +1106,10 @@ class GdocController extends AbstractController
         $logger->addLog($em, "open", $object, $usuario, TRUE);
         $em->flush();
         //RUTA LOCAL
-        //return new RedirectResponse($url.'?file_path=file://'.'C:\Users\david.jimenez\Desktop\Versiones codigo\CARPETAS PROVES LIBREOFFICE PREVENCIÓ\NOVA CARPETA'.'/'.$nombreFichero.'&host='.$host);
+        //return new RedirectResponse($url.'?file_path='.'C:\Users\david.jimenez\Desktop\Versiones codigo\CARPETAS PROVES LIBREOFFICE PREVENCIÓ\NOVA CARPETA'.'/'.$nombreFichero.'&host=storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=host='.$host);
 
         //RUTA PROD
-        return new RedirectResponse($url . '?file_path=file://' . $rutaGestionDocumental . $carpetaPlantillaGenerada . '/' . $nombreAux . '&host=' . $host);
+        return new RedirectResponse($url . '?file_path=' . 'https://app.mdtprevencion.com/wopi/files/' . $carpetaPlantillaGenerada . '/' . $nombreAux . '&host=storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=host=' . $host);
     }
 
     // Peticio 28/07/2023
@@ -1108,7 +1120,7 @@ class GdocController extends AbstractController
 
         $user = $this->getUser();
         $usuario = $em->getRepository('App\Entity\User')->find($user);
-        $puestosTrabajoSeleccionadosSelect2 = $_REQUEST['select2'];
+        $puestosTrabajoSeleccionadosSelect2 = $_REQUEST['select2'] ?? '';
         $plantillaId = $_REQUEST['plantillaId'];
         $plantilla = $this->getDoctrine()->getRepository('App\Entity\GdocPlantillas')->find($plantillaId);
         $nombreCompleto = $plantilla->getNombreCompleto();
@@ -1525,12 +1537,12 @@ class GdocController extends AbstractController
             }
             if ($tipo == '13') {
                 $data = array(
-                    'url' => $url . '?file_path=file://' . $rutaGestionDocumental . $carpetaPlantillaGenerada . '/' . $nuevaPlantilla . '&host=' . $host,
+                    'url' => $url . '?file_path=' . 'https://app.mdtprevencion.com/wopi/files/' . $carpetaPlantillaGenerada . '/' . $nuevaPlantilla . '&host=storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=host=' . $host,
                     'urlpdf' => $this->obtenerPdfAnalitica($revision)
                 );
             } else {
                 $data = array(
-                    'url' => $url . '?file_path=file://' . $rutaGestionDocumental . $carpetaPlantillaGenerada . '/' . $nuevaPlantilla . '&host=' . $host
+                    'url' => $url . '?file_path=' . 'https://app.mdtprevencion.com/wopi/files/' . $carpetaPlantillaGenerada . '/' . $nuevaPlantilla . '&host=storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=host=' . $host
                 );
             }
             $traduccion = $translator->trans('TRANS_CREATE_OK');
@@ -1548,7 +1560,7 @@ class GdocController extends AbstractController
         $user = $this->getUser();
         $usuario = $em->getRepository('App\Entity\User')->find($user);
         //eliminar
-        $puestosTrabajoSeleccionadosSelect2 = $_REQUEST['select2'];
+        $puestosTrabajoSeleccionadosSelect2 = $_REQUEST['select2'] ?? '';
         //$puestosTrabajoSeleccionadosSelect2 = "";
 
         $plantillaId = $_REQUEST['plantillaId'];
@@ -1563,6 +1575,7 @@ class GdocController extends AbstractController
         $carpetaPlantillaGenerada = $gdocConfig->getCarpetaGenerada();
         $carpetaPlantillas = $gdocConfig->getCarpetaPlantillas();
         $url = $gdocConfig->getUrl();
+        $evaluacionZonaTrabajo = null;
         $host = $gdocConfig->getHost();
 
         //tipo == 1 es CONTRATO
@@ -2012,12 +2025,12 @@ class GdocController extends AbstractController
             }
             if ($tipo == '13') {
                 $data = array(
-                    'url' => $url . '?file_path=file://' . $rutaGestionDocumental . $carpetaPlantillaGenerada . '/' . $nuevaPlantilla . '&host=' . $host,
+                    'url' => $url . '?file_path=' . 'https://app.mdtprevencion.com/wopi/files/' . $carpetaPlantillaGenerada . '/' . $nuevaPlantilla . '&host=storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=host=' . $host,
                     'urlpdf' => $this->obtenerPdfAnalitica($revision)
                 );
             } else {
                 $data = array(
-                    'url' => $url . '?file_path=file://' . $rutaGestionDocumental . $carpetaPlantillaGenerada . '/' . $nuevaPlantilla . '&host=' . $host
+                    'url' => $url . '?file_path=' . 'https://app.mdtprevencion.com/wopi/files/' . $carpetaPlantillaGenerada . '/' . $nuevaPlantilla . '&host=storageServer=' . urlencode('https://app.mdtprevencion.com') . '&host=host=' . $host
                 );
             }
             $traduccion = $translator->trans('TRANS_CREATE_OK');
@@ -3619,7 +3632,7 @@ class GdocController extends AbstractController
                 array_push($arrayMaquinariaEmpresa, $item);
             }
             //eliminar
-            $templateProcessor->cloneRowAndSetValues('EQUIPO_MAQUINA', $this->cleanText($arrayMaquinariaEmpresa));
+            $templateProcessor->cloneRowAndSetValues('EQUIPO_MAQUINA', $arrayMaquinariaEmpresa);
             //$templateProcessor->cloneRowAndSetValues('EQUIPO_MAQUINA', $arrayMaquinariaEmpresa);
 
             //Recorremos el array de imagenes añadir las imagenes de las zonas de trabajo
@@ -8352,7 +8365,7 @@ class GdocController extends AbstractController
 
     function convertWordToPdf($word, $pdf)
     {
-        $cmd = 'soffice --headless --convert-to pdf:writer_pdf_Export "' . $word . '" --outdir "' . $pdf . '"';
+        $cmd = 'HOME=/tmp /usr/bin/soffice --headless --convert-to pdf:writer_pdf_Export "' . $word . '" --outdir "' . $pdf . '"';
         exec($cmd);
     }
 
@@ -8772,7 +8785,7 @@ class GdocController extends AbstractController
                         //$outdir = "C:/tmp/";
 
                         //RUTA PROD
-                        $cmd = 'soffice --headless --convert-to pdf:writer_pdf_Export "' . $fileDocx . '" --outdir "' . $outdir . '"';
+                        $cmd = 'HOME=/tmp /usr/bin/soffice --headless --convert-to pdf:writer_pdf_Export "' . $fileDocx . '" --outdir "' . $outdir . '"';
                         //RUTA LOCAL
                         //$cmd = '"C:\Program Files (x86)\LibreOffice 5\program\soffice.exe" --headless --convert-to pdf:writer_pdf_Export "'.$fileDocx.'" --outdir "'.$outdir.'"';
                         exec($cmd);

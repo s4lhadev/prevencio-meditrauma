@@ -52,7 +52,7 @@ class Logger {
         $resultId = $stmt->fetchAll();
         $id = $resultId[0]['last_value'];*/
 
-        $query = "INSERT INTO ext_log_entries (action, logged_at, object_id, object_class, version, data, username) VALUES ('".$action."', NOW(), '".$objectId."', '".$entityName."', 1, '$newdata', '".$username."')";
+        $query = "INSERT INTO ext_log_entries VALUES (nextval('ext_log_entries_id_seq'),'".$action."',now(), '".$objectId."', '".$entityName."', 1, '$newdata', '".$username."')";
         $stmt = $em->getConnection()->prepare($query);
         $stmt->execute();
 
@@ -68,7 +68,7 @@ class Logger {
         //$resultId = $stmt->fetchAll();
         //$id = $resultId[0]['id'];
         //$idFinal = $id + 1;
-        $query = "INSERT INTO log_renovaciones (usuari, data_log, boto, contractes) VALUES ('".$username."', '".$hoy."', '".$boto."', '".$contractes."')";
+        $query = "INSERT INTO log_renovaciones (id, usuari, data_log, boto, contractes) VALUES (nextval('ext_log_entries_id_seq'), '".$username."', '".$hoy."','".$boto. "','".$contractes."')";
         $stmt = $em->getConnection()->prepare($query);
         $stmt->execute();
 

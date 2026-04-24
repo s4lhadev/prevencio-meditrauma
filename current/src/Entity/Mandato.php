@@ -19,7 +19,7 @@ class Mandato
     private $id;
 
 	/**
-	 * @ORM\Column(type="string", length=2000, nullable=true)
+	 * @ORM\Column(type="text", nullable=true)
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $referencia;
@@ -43,7 +43,7 @@ class Mandato
 	private $tipoMandato;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $anulado = false;
@@ -55,7 +55,7 @@ class Mandato
 	private $documento;
 
 	/**
-	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":"false"})
+	 * @ORM\Column(type="boolean", length=255, nullable=true, options={"default":0})
 	 * @Gedmo\Mapping\Annotation\Versioned()
 	 */
 	private $firmado = false;

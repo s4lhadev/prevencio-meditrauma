@@ -23,7 +23,7 @@ class SmsController extends AbstractController
         // Configuring curl options
         $options = array(
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST, 'POST',
+            CURLOPT_CUSTOMREQUEST => 'POST',
             CURLOPT_HTTPHEADER => array('Content-type:  application/x-www-form-urlencoded'),
             CURLOPT_POSTFIELDS => $data2,
             CURLOPT_SSL_VERIFYPEER =>false,
@@ -74,7 +74,7 @@ class SmsController extends AbstractController
         // Configuring curl options
         $options = array(
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST, 'POST',
+            CURLOPT_CUSTOMREQUEST => 'POST',
             CURLOPT_HTTPHEADER => array('Content-type:  application/x-www-form-urlencoded'),
             CURLOPT_POSTFIELDS => $data2,
             CURLOPT_SSL_VERIFYPEER =>false,

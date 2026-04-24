@@ -317,7 +317,7 @@ class CitacionController extends AbstractController {
         $outdir = $rutaGestionDocumental.$carpetaPlantillaGenerada;
 
         //$cmd = '"C:\Program Files (x86)\LibreOffice 5\program\soffice.exe" --headless --convert-to pdf:writer_pdf_Export "'.$fileDocx.'" --outdir "'.$outdir.'"';
-        $cmd = 'soffice --headless --convert-to pdf:writer_pdf_Export "'.$fileDocx.'" --outdir "'.$outdir.'"';
+        $cmd = 'HOME=/tmp /usr/bin/soffice --headless --convert-to pdf:writer_pdf_Export "'.$fileDocx.'" --outdir "'.$outdir.'"';
         exec($cmd);
 
         return $filePdf;

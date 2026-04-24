@@ -31,7 +31,7 @@ class AccionPreventivaTrabajadorRiesgoCausa
     private $fechaRealizacion;
 
     /**
-     * @ORM\Column(type="string", length=2000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $costePrevisto;
@@ -58,7 +58,7 @@ class AccionPreventivaTrabajadorRiesgoCausa
     private $empresaExterna;
 
     /**
-     * @ORM\Column(type="string", length=20000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $observaciones;
@@ -71,7 +71,7 @@ class AccionPreventivaTrabajadorRiesgoCausa
     private $riesgoCausa;
 
     /**
-     * @ORM\Column(type="boolean", nullable=true, options={"default":"false"})
+     * @ORM\Column(type="boolean", nullable=true, options={"default":0})
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $anulado = false;
@@ -84,7 +84,7 @@ class AccionPreventivaTrabajadorRiesgoCausa
     private $preventivaTrabajador;
 
     /**
-     * @ORM\Column(type="string", length=20000, nullable=true)
+     * @ORM\Column(type="text", nullable=true)
      * @Gedmo\Mapping\Annotation\Versioned()
      */
     private $descripcion;

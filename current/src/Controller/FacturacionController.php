@@ -1582,7 +1582,7 @@ class FacturacionController extends AbstractController
                 $filePdf = str_replace('docx', 'pdf', $fileDocx);
                 $outdir = $rutaCompleta . $carpetaGenerada;
 
-                $cmd = 'soffice --headless --convert-to pdf:writer_pdf_Export "' . $fileDocx . '" --outdir "' . $outdir . '"';
+                $cmd = 'HOME=/tmp /usr/bin/soffice --headless --convert-to pdf:writer_pdf_Export "' . $fileDocx . '" --outdir "' . $outdir . '"';
                 exec($cmd);
 
                 //Encriptamos el documento

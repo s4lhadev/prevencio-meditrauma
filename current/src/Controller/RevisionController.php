@@ -603,6 +603,11 @@ class RevisionController extends AbstractController
         $citacion = null;
         if (isset($_REQUEST['citacionId'])) {
             $citacion = $em->getRepository('App\Entity\Citacion')->find($_REQUEST['citacionId']);
+            $estadosPermitidos = [2, 3, 7]; // Realizado, Finalizado, Pasada
+            if (!is_null($citacion) && !is_null($citacion->getEstado()) && !in_array($citacion->getEstado()->getId(), $estadosPermitidos)) {
+                $this->addFlash('danger', 'No se puede crear una revisión con el estado actual de la citación');
+                return $this->redirectToRoute('citacion_update', array('id' => $citacion->getId()));
+            }
             $revision->setCitacion($citacion);
             $revision->setPruebasComplementarias($citacion->getPruebasComplementarias());
             $revision->setFecha($citacion->getFechainicio());

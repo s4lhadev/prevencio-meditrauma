@@ -1,0 +1,11 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # WOPI endpoint - serve directly, skip Symfony
+    RewriteRule ^wopi/files/(.*)$ wopi.php [QSA,L]
+
+    # Symfony front controller
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>

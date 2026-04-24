@@ -341,7 +341,7 @@ class RenovacionController extends AbstractController
                 $this->addFlash('danger', $traduccion);
                 return $this->redirectToRoute('contrato_show');
             }
-            //$renovacion->setRenovado(true);
+            $renovacion->setRenovado(true);
             $renovacion->setDocumentoRenovacion(1);
 
             $em->persist($renovacion);
@@ -686,7 +686,7 @@ class RenovacionController extends AbstractController
                         $stmt->execute();
                         $resultImporteExentoIva = $stmt->fetchAll();
 
-                        $query = "select sum(importe_sujeto_iva) as importe from contrato_pago where contrato_id = $oldContratoId and anulad = false";
+                        $query = "select sum(importe_sujeto_iva) as importe from contrato_pago where contrato_id = $oldContratoId and anulado = false";
                         $stmt = $this->getDoctrine()->getManager()->getConnection()->prepare($query);
                         $stmt->execute();
                         $resultImporteSujetoIva = $stmt->fetchAll();
