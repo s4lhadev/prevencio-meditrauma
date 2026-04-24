@@ -63,6 +63,11 @@ git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/${BRANCH
 git reset --hard "origin/${BRANCH}"
 # Webpack Encore: public/build/ en .gitignore. El vhost a menudo apunta a current/; hay que
 # construir en *cada* ruta con package.json (current antes que portal), sin duplicar misma ruta (realpath).
+# node-sass → node-gyp: busca "python"; en Debian 12+ a menudo solo hay python3 (y portal/.npmrc)
+if command -v python3 >/dev/null 2>&1; then
+  export PYTHON="${PYTHON:-$(command -v python3)}"
+  export npm_config_python="$PYTHON"
+fi
 NPM_BUILT=0
 SEEN=" "
 if command -v npm >/dev/null 2>&1; then
