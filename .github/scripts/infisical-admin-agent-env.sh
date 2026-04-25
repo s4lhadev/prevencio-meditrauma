@@ -146,4 +146,27 @@ _merge_symfony_dotenv_from_admin_agent() {
 }
 _merge_symfony_dotenv_from_admin_agent
 
+# Infisical a veces no define ADMIN_AGENT_PAGE_KEY en el secret; evita el flash "Falta…" hasta que se suba la clave
+_ensure_page_key_in_php_env_from_dist() {
+  local distline
+  distline=$(grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$REPO_ROOT/portal/.env.dist" 2>/dev/null || grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$REPO_ROOT/current/.env.dist" 2>/dev/null || true)
+  [ -n "$distline" ] || return 0
+  for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
+    [ -f "$f" ] || continue
+    val=""
+    if grep -qE '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null; then
+      val=$(grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null | cut -d= -f2-)
+      val=$(printf '%s' "$val" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    fi
+    [ -n "$val" ] && continue
+    if grep -qE '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null; then
+      grep -v '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" > "${f}.new" 2>/dev/null || : > "${f}.new"
+      mv "${f}.new" "$f"
+    fi
+    printf '%s\n' "$distline" >> "$f"
+    echo "Aviso: ADMIN_AGENT_PAGE_KEY rellenado desde .env.dist en $f (pon la clave real en Infisical si no está)" >&2
+  done
+}
+_ensure_page_key_in_php_env_from_dist
+
 echo "OK Infisical → $OUT"

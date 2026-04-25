@@ -77,11 +77,19 @@ fi
 # o renombra/elimina .env.local.php un momento y deja que bootstrap cargue .env (cuidado con secretos inexistentes en .env).
 
 # vendor/ — app.mdtprevencion.com usa current/public; portal.mdt* usa portal/public. Ambas apps necesitan autoload al día.
+# Si falla (p. ej. "Could not resolve host: flex.symfony.com"), reintentar con --no-plugins: instala desde lock sin el plugin Flex en red.
+_composer_install_dir() {
+  local d="$1"
+  (cd "$d" && composer install --no-dev --no-interaction --optimize-autoloader) && return 0
+  echo "Aviso: composer falló en $d (a menudo DNS a flex.symfony.com). Reintentando con --no-plugins…" >&2
+  (cd "$d" && composer install --no-dev --no-interaction --optimize-autoloader --no-plugins) || return 1
+  return 0
+}
 if command -v composer >/dev/null 2>&1; then
   for _c in "$TOP/current" "$TOP/portal"; do
     [ -f "$_c/composer.json" ] || continue
-    (cd "$_c" && composer install --no-dev --no-interaction --optimize-autoloader) || {
-      echo "ERROR: composer install falló en $_c" >&2
+    _composer_install_dir "$_c" || {
+      echo "ERROR: composer install falló en $_c (revisa red/DNS; en la VM: echo nameserver 8.8.8.8 | sudo tee /etc/resolv.conf.d/… o arregla resolved)." >&2
       exit 1
     }
   done
