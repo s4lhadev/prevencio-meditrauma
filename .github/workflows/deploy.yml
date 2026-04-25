@@ -21,7 +21,7 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           version: latest
-          ping: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}
+          # Sin ping: evita "lookup: no such host" en tailscale ping (peers aún no propagados / MagicDNS).
 
       - name: Add SSH key
         env:
@@ -41,6 +41,7 @@ jobs:
           INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
         run: |
           set -e
+          sleep 15
           P="${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH }}"
           if [ -z "$P" ] || [ "$P" = "SET_ME" ]; then
             echo "Define DEPLOY_PATH: Repository secret o variable (Settings → Actions → Secrets/Variables)"
