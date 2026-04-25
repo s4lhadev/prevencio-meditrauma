@@ -71,6 +71,16 @@ git reset --hard "origin/${BRANCH}"
 if [ -f "$TOP/.github/scripts/infisical-admin-agent-env.sh" ]; then
   bash "$TOP/.github/scripts/infisical-admin-agent-env.sh" "$TOP" || exit 1
 fi
+# En prod Symfony 4, bootstrap.php usa .env.local.php si existe (composer dump-env) y NO relee .env.
+# Tras modificar .env (merge de ADMIN_AGENT_*) hace falta recompilar env o los cambios no aplican.
+if command -v composer >/dev/null 2>&1; then
+  for _d in "$TOP/portal" "$TOP/current"; do
+    [ -f "$_d/.env" ] && [ -f "$_d/composer.json" ] || continue
+    (cd "$_d" && composer dump-env prod) || {
+      echo "Aviso: composer dump-env prod falló en $_d (revisa Composer/symfony/flex; sin esto, .env editado no afecta si existe .env.local.php)." >&2
+    }
+  done
+fi
 
 # Webpack Encore: public/build/ en .gitignore. El vhost a menudo apunta a current/; hay que
 # construir en *cada* ruta con package.json (current antes que portal), sin duplicar misma ruta (realpath).
