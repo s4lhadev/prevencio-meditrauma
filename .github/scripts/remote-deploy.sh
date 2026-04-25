@@ -120,13 +120,11 @@ if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
   (cd admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
 fi
-if [ -f "$TOP/current/bin/console" ]; then
-  (cd "$TOP/current" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
-elif [ -f "$TOP/portal/bin/console" ]; then
-  (cd "$TOP/portal" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
-elif [ -f "$TOP/bin/console" ]; then
-  (cd "$TOP" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
-fi
+# Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony (antes solo una rama if/elif)
+for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
+  [ -f "$_symf/bin/console" ] || continue
+  (cd "$_symf" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
+done
 if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
   sudo systemctl restart prevencion-admin-agent || true
 fi

@@ -126,4 +126,24 @@ if [ -n "${APP_PRODUCT_OVERRIDE:-}" ]; then
   echo "APP_PRODUCT=$APP_PRODUCT_OVERRIDE" >> "$OUT"
 fi
 
+_merge_symfony_dotenv_from_admin_agent() {
+  local agent_env k line v f
+  agent_env="$REPO_ROOT/$AGENT_SUB/.env"
+  [ -f "$agent_env" ] || return 0
+  for k in ADMIN_AGENT_INTERNAL_URL ADMIN_AGENT_SECRET ADMIN_AGENT_PAGE_KEY; do
+    line=$(grep -m1 "^[[:space:]]*${k}=" "$agent_env" 2>/dev/null || true)
+    [ -n "$line" ] || continue
+    v="${line#*=}"
+    for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
+      [ -f "$f" ] || continue
+      if grep -q "^[[:space:]]*${k}=" "$f" 2>/dev/null; then
+        grep -v "^[[:space:]]*${k}=" "$f" > "${f}.new" 2>/dev/null || : > "${f}.new"
+        mv "${f}.new" "$f"
+      fi
+      printf '%s=%s\n' "$k" "$v" >> "$f"
+    done
+  done
+}
+_merge_symfony_dotenv_from_admin_agent
+
 echo "OK Infisical → $OUT"
