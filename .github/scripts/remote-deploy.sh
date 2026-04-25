@@ -77,12 +77,14 @@ fi
 # o renombra/elimina .env.local.php un momento y deja que bootstrap cargue .env (cuidado con secretos inexistentes en .env).
 
 # vendor/ — app.mdtprevencion.com usa current/public; portal.mdt* usa portal/public. Ambas apps necesitan autoload al día.
-# Si falla (p. ej. "Could not resolve host: flex.symfony.com"), reintentar con --no-plugins: instala desde lock sin el plugin Flex en red.
+# Si falla (p. ej. "Could not resolve host: flex.symfony.com"), reintentar con --no-plugins y --no-scripts:
+# sin plugins no existe symfony-cmd (lo pone flex); --no-scripts evita @auto-scripts (cache:clear/assets:install vía flex).
+# cache:clear y assets:install se hacen más abajo con bin/console.
 _composer_install_dir() {
   local d="$1"
   (cd "$d" && composer install --no-dev --no-interaction --optimize-autoloader) && return 0
-  echo "Aviso: composer falló en $d (a menudo DNS a flex.symfony.com). Reintentando con --no-plugins…" >&2
-  (cd "$d" && composer install --no-dev --no-interaction --optimize-autoloader --no-plugins) || return 1
+  echo "Aviso: composer falló en $d (a menudo DNS a flex.symfony.com). Reintentando con --no-plugins --no-scripts…" >&2
+  (cd "$d" && composer install --no-dev --no-interaction --optimize-autoloader --no-plugins --no-scripts) || return 1
   return 0
 }
 if command -v composer >/dev/null 2>&1; then
@@ -92,6 +94,11 @@ if command -v composer >/dev/null 2>&1; then
       echo "ERROR: composer install falló en $_c (revisa red/DNS; en la VM: echo nameserver 8.8.8.8 | sudo tee /etc/resolv.conf.d/… o arregla resolved)." >&2
       exit 1
     }
+  done
+  # Sustituye auto-scripts (symfony-cmd) si el reintento fue sin plugins/scripts; idempotente si ya corrieron.
+  for _a in "$TOP/current" "$TOP/portal"; do
+    [ -f "$_a/bin/console" ] || continue
+    (cd "$_a" && php bin/console assets:install public --env=prod --no-interaction) 2>/dev/null || true
   done
 else
   echo "Aviso: composer no está en PATH; omite composer install (riesgo de 500 si vendor desactualizado)." >&2
