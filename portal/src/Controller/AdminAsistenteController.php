@@ -2,20 +2,29 @@
 
 namespace App\Controller;
 
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+
 /**
  * Asistente IA bajo /agent — proxy a admin_agent/ (local). Rutas en config/routes.yaml.
- *
- * @IsGranted("ROLE_ADMIN")
+ * Acceso con clave en sesión; no requiere ROLE_ADMIN / login.
  */
 class AdminAsistenteController extends AbstractController
 {
-    public function index(): Response
+    const SESSION_PAGE_UNLOCK = 'admin_asistente_page_unlocked';
+
+    public function index(Request $request): Response
     {
+        $pageKey = trim((string) $this->getParameter('admin_agent.page_key'));
+        if ($pageKey === '') {
+            return $this->render('admin_asistente/page_not_configured.html.twig');
+        }
+        if (!$this->isAgentPageUnlocked($request)) {
+            return $this->render('admin_asistente/unlock.html.twig');
+        }
+
         $base = (string) $this->getParameter('admin_agent.internal_url');
         $secret = (string) $this->getParameter('admin_agent.secret');
         if ($base === '' || $secret === '' || $secret === 'change_me_match_admin_agent_env') {
@@ -29,8 +38,45 @@ class AdminAsistenteController extends AbstractController
         ));
     }
 
+    public function unlock(Request $request): Response
+    {
+        if (!$request->isMethod('POST')) {
+            return $this->redirectToRoute('admin_asistente');
+        }
+        $pageKey = trim((string) $this->getParameter('admin_agent.page_key'));
+        if ($pageKey === '') {
+            $this->addFlash('error', 'Falta ADMIN_AGENT_PAGE_KEY en .env.');
+
+            return $this->redirectToRoute('admin_asistente');
+        }
+        if (!$this->isCsrfTokenValid('admin_asistente_unlock', (string) $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Sesión de seguridad inválida. Prueba otra vez.');
+
+            return $this->redirectToRoute('admin_asistente');
+        }
+        $submitted = (string) $request->request->get('key', '');
+        if (!hash_equals($pageKey, $submitted)) {
+            $this->addFlash('error', 'Clave incorrecta.');
+
+            return $this->redirectToRoute('admin_asistente');
+        }
+        $request->getSession()->set(self::SESSION_PAGE_UNLOCK, true);
+
+        return $this->redirectToRoute('admin_asistente');
+    }
+
+    public function logout(Request $request): Response
+    {
+        $request->getSession()->remove(self::SESSION_PAGE_UNLOCK);
+
+        return $this->redirectToRoute('admin_asistente');
+    }
+
     public function chat(Request $request): JsonResponse
     {
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
+        }
         $data = json_decode($request->getContent(), true);
         if (!is_array($data)) {
             return new JsonResponse(array('error' => 'invalid_json'), 400);
@@ -75,8 +121,11 @@ class AdminAsistenteController extends AbstractController
         return new JsonResponse($decoded, 200);
     }
 
-    public function indexStatus(): JsonResponse
+    public function indexStatus(Request $request): JsonResponse
     {
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
+        }
         $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
         $internalSecret = (string) $this->getParameter('admin_agent.secret');
         if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
@@ -104,6 +153,9 @@ class AdminAsistenteController extends AbstractController
 
     public function reindex(Request $request): JsonResponse
     {
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
+        }
         if (!$request->isMethod('POST')) {
             return new JsonResponse(array('error' => 'method'), 405);
         }
@@ -136,5 +188,15 @@ class AdminAsistenteController extends AbstractController
         }
 
         return new JsonResponse($decoded, 200);
+    }
+
+    private function isAgentPageUnlocked(Request $request): bool
+    {
+        $pageKey = trim((string) $this->getParameter('admin_agent.page_key'));
+        if ($pageKey === '') {
+            return false;
+        }
+
+        return (bool) $request->getSession()->get(self::SESSION_PAGE_UNLOCK);
     }
 }

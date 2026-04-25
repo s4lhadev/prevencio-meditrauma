@@ -13,6 +13,8 @@ Misma idea que en Medisalut: el runner entra al tailnet, luego **SSH** a la VM (
 
 **`DEPLOY_PATH` y `DEPLOY_USER`:** en *Secrets* **o** en *Variables* (mismo nombre). Si solo los tienes en *Secrets*, el workflow los usa (antes solo se leía la pestaña *Variables*).
 
+**Clave `/agent`:** define `ADMIN_AGENT_PAGE_KEY` en el `.env` del despliegue (mismo concepto que `admin_agent.page_key` en Symfony). Formulario de acceso independiente del login; `php bin/console cache:clear --env=prod` tras cambiar.
+
 **Infisical:** solo hace falta el token. Tras el export fuerza `APP_PRODUCT=prevencion`. Mismo orden de instalación del CLI que en `medisalut` (`npx` → `~/.local/bin` → `apt` con `sudo -n`).
 
 Claves típicas: `ADMIN_AGENT_SECRET`, `OPENROUTER_*`, `APP_PRODUCT`. Alinea `ADMIN_AGENT_*` en Symfony (`current/.env`) con el mismo secreto y uvicorn.

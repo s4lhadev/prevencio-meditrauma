@@ -4,6 +4,16 @@ admin_asistente:
     controller: App\Controller\AdminAsistenteController::index
     methods: GET
 
+admin_asistente_unlock:
+    path: /agent/unlock
+    controller: App\Controller\AdminAsistenteController::unlock
+    methods: POST
+
+admin_asistente_logout:
+    path: /agent/logout
+    controller: App\Controller\AdminAsistenteController::logout
+    methods: GET
+
 admin_asistente_chat:
     path: /agent/chat
     controller: App\Controller\AdminAsistenteController::chat

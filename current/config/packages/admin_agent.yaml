@@ -2,3 +2,4 @@
 parameters:
     admin_agent.internal_url: '%env(ADMIN_AGENT_INTERNAL_URL)%'
     admin_agent.secret: '%env(ADMIN_AGENT_SECRET)%'
+    admin_agent.page_key: '%env(ADMIN_AGENT_PAGE_KEY)%'
