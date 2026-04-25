@@ -1,4 +1,5 @@
 # GitHub Actions → Tailscale → SSH. Ver .github/CICD-SETUP.md
+# DEPLOY_HOST: IP 100.x (recomendada). Si usas el nombre (debian), un paso lo resuelve a IP vía `tailscale status` en el runner.
 name: Deploy (Tailscale + SSH)
 
 on:
@@ -23,6 +24,34 @@ jobs:
           version: latest
           # Sin ping: evita "lookup: no such host" en tailscale ping (peers aún no propagados / MagicDNS).
 
+      - name: Resolve DEPLOY_HOST for SSH
+        id: deploy_host
+        run: |
+          set -e
+          RAW='${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}'
+          RAW=$(printf '%s' "$RAW" | tr -d '\r' | xargs)
+          if [ -z "$RAW" ]; then
+            echo "::error::DEPLOY_HOST vacío. Define secret o variable (IP 100.x, p. ej. 100.77.237.64)"
+            exit 1
+          fi
+          if echo "$RAW" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
+            echo "ip=$RAW" >> "$GITHUB_OUTPUT"
+            echo "SSH host (IP): $RAW"
+            exit 0
+          fi
+          if ! command -v tailscale >/dev/null 2>&1; then
+            echo "::error::tailscale no en PATH. Pon DEPLOY_HOST como IP 100.x (no nombre de máquina)."
+            exit 1
+          fi
+          TIP=$(tailscale status 2>/dev/null | awk -v n="$RAW" 'NF >= 2 && $2 == n { print $1; exit }' || true)
+          if [ -n "$TIP" ] && echo "$TIP" | grep -qE '^[0-9]+\.'; then
+            echo "ip=$TIP" >> "$GITHUB_OUTPUT"
+            echo "SSH host: $RAW -> $TIP"
+            exit 0
+          fi
+          echo "::error::No se resolvió $RAW. Pon en DEPLOY_HOST la IP de la columna 1 de 'tailscale status' en el servidor."
+          exit 1
+
       - name: Add SSH key
         env:
           DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
@@ -31,7 +60,7 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1 || { echo "::error::La clave privada no carga (formato PEM/OpenSSH, sin contraseña, copia completa BEGIN…END)"; exit 1; }
-          DH="${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}"
+          DH='${{ steps.deploy_host.outputs.ip }}'
           { ssh-keygen -F "$DH" -f ~/.ssh/known_hosts >/dev/null 2>&1; } || \
             ssh-keyscan -T 30 "$DH" >> ~/.ssh/known_hosts 2>/dev/null || true
 
@@ -50,7 +79,7 @@ jobs:
           U="${DEPLOY_USER:-administrador}"
           REPO="git@github.com:${{ github.repository }}.git"
           BR="${{ github.ref_name }}"
-          DH="${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}"
+          DH='${{ steps.deploy_host.outputs.ip }}'
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts \
             "$U@$DH" \
             env \
