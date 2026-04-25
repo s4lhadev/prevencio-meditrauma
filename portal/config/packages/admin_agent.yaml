@@ -1,5 +1,7 @@
-# Set ADMIN_AGENT_INTERNAL_URL and ADMIN_AGENT_SECRET in .env (see .env.dist)
+# Defaults alineados con .env.dist (evita EnvNotFoundException si falta una clave en .env)
 parameters:
+    env(ADMIN_AGENT_INTERNAL_URL): 'http://127.0.0.1:9102'
+    env(ADMIN_AGENT_SECRET): ''
     env(ADMIN_AGENT_PAGE_KEY): ''
     admin_agent.internal_url: '%env(ADMIN_AGENT_INTERNAL_URL)%'
     admin_agent.secret: '%env(ADMIN_AGENT_SECRET)%'

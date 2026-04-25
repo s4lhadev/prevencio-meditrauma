@@ -1,6 +1,8 @@
 # Igual que portal/. Mismas variables en .env o .env.local
-# Valor por defecto vacío si no existe la variable (evita EnvNotFoundException al desplegar)
+# Defaults: si faltan en el entorno, Symfony no lanza EnvNotFoundException (500 al arrancar)
 parameters:
+    env(ADMIN_AGENT_INTERNAL_URL): 'http://127.0.0.1:9102'
+    env(ADMIN_AGENT_SECRET): ''
     env(ADMIN_AGENT_PAGE_KEY): ''
     admin_agent.internal_url: '%env(ADMIN_AGENT_INTERNAL_URL)%'
     admin_agent.secret: '%env(ADMIN_AGENT_SECRET)%'
