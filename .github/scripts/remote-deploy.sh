@@ -76,6 +76,19 @@ fi
 #   composer dump-env prod
 # o renombra/elimina .env.local.php un momento y deja que bootstrap cargue .env (cuidado con secretos inexistentes en .env).
 
+# vendor/ — app.mdtprevencion.com usa current/public; portal.mdt* usa portal/public. Ambas apps necesitan autoload al día.
+if command -v composer >/dev/null 2>&1; then
+  for _c in "$TOP/current" "$TOP/portal"; do
+    [ -f "$_c/composer.json" ] || continue
+    (cd "$_c" && composer install --no-dev --no-interaction --optimize-autoloader) || {
+      echo "ERROR: composer install falló en $_c" >&2
+      exit 1
+    }
+  done
+else
+  echo "Aviso: composer no está en PATH; omite composer install (riesgo de 500 si vendor desactualizado)." >&2
+fi
+
 # Webpack Encore: public/build/ en .gitignore. El vhost a menudo apunta a current/; hay que
 # construir en *cada* ruta con package.json (current antes que portal), sin duplicar misma ruta (realpath).
 # Webpack/Encore con Dart Sass (paquete "sass") no requiere node-gyp; dejamos python por si otro módulo lo pide
@@ -124,7 +137,13 @@ if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
   (cd admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
 fi
-# Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony (antes solo una rama if/elif)
+# var/ a veces queda con dueño www-data (deploy anterior); el usuario de deploy no puede crear var/cache → falla console
+# y app.mdtprevencion.com (current) devuelve 500.
+if command -v sudo >/dev/null 2>&1; then
+  mkdir -p "$TOP/current/var" "$TOP/portal/var" 2>/dev/null || true
+  sudo -n chown -R "$(id -u -n):$(id -g -n)" "$TOP/current/var" "$TOP/portal/var" 2>/dev/null || true
+fi
+# Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony
 for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
   [ -f "$_symf/bin/console" ] || continue
   (cd "$_symf" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
@@ -139,5 +158,14 @@ if command -v sudo >/dev/null 2>&1; then
     [ -d "$v" ] || continue
     sudo -n chown -R "$WEB_USER:$WEB_USER" "$v" 2>/dev/null || true
   done
+  # .env con modo 600 y solo el usuario de deploy: Apache (www-data) no puede leer → PathException "Unable to read .env" (HTTP 500)
+  if getent group "$WEB_USER" >/dev/null 2>&1; then
+    for _app in "$TOP/current" "$TOP/portal"; do
+      for _f in "$_app/.env" "$_app/.env.local" "$_app/.env.local.php"; do
+        [ -f "$_f" ] || continue
+        sudo -n chgrp "$WEB_USER" "$_f" 2>/dev/null && sudo -n chmod 640 "$_f" 2>/dev/null || true
+      done
+    done
+  fi
 fi
 echo "OK deploy prevencion $TOP"
