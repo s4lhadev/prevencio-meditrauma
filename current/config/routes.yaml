@@ -4,11 +4,6 @@ admin_asistente:
     controller: App\Controller\AdminAsistenteController::index
     methods: GET
 
-admin_asistente_slash:
-    path: /agent/
-    controller: App\Controller\AdminAsistenteController::index
-    methods: GET
-
 admin_asistente_unlock:
     path: /agent/unlock
     controller: App\Controller\AdminAsistenteController::unlock
