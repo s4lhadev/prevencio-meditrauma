@@ -151,21 +151,24 @@ done
 if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
   sudo systemctl restart prevencion-admin-agent || true
 fi
-# var/ (Symfony: log, caché) — www-data; enlaces p. ej. current/ hacia un release
+# Apache (www-data) y el usuario de deploy: mismo grupo en todo current/ y portal/
+#  - NUNCA dejar var/ solo como www-data:www-data: el deploy no podrá cache:clear (portal lo mostró)
+#  - Dirs 2775 (setgid) + files 664: www-data (grupo) lee config/, public/build/manifest.json; u escribe en var/
 WEB_USER="${DEPLOY_WEB_USER:-www-data}"
-if command -v sudo >/dev/null 2>&1; then
-  for v in "$TOP/current/var" "$TOP/portal/var" "$TOP/var"; do
-    [ -d "$v" ] || continue
-    sudo -n chown -R "$WEB_USER:$WEB_USER" "$v" 2>/dev/null || true
-  done
-  # .env con modo 600 y solo el usuario de deploy: Apache (www-data) no puede leer → PathException "Unable to read .env" (HTTP 500)
-  if getent group "$WEB_USER" >/dev/null 2>&1; then
-    for _app in "$TOP/current" "$TOP/portal"; do
-      for _f in "$_app/.env" "$_app/.env.local" "$_app/.env.local.php"; do
-        [ -f "$_f" ] || continue
-        sudo -n chgrp "$WEB_USER" "$_f" 2>/dev/null && sudo -n chmod 640 "$_f" 2>/dev/null || true
-      done
+U="$(id -u -n)"
+if command -v sudo >/dev/null 2>&1 && getent group "$WEB_USER" >/dev/null 2>&1; then
+  for _app in "$TOP/current" "$TOP/portal"; do
+    [ -d "$_app" ] || continue
+    sudo -n chown -R "$U:$WEB_USER" "$_app" 2>/dev/null || true
+    sudo -n find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
+    sudo -n find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
+    for _f in "$_app/.env" "$_app/.env.local" "$_app/.env.local.php"; do
+      [ -f "$_f" ] || continue
+      sudo -n chgrp "$WEB_USER" "$_f" 2>/dev/null && sudo -n chmod 640 "$_f" 2>/dev/null || true
     done
+  done
+  if [ -d "$TOP/var" ]; then
+    sudo -n chown -R "$U:$WEB_USER" "$TOP/var" 2>/dev/null || true
   fi
 fi
 echo "OK deploy prevencion $TOP"
