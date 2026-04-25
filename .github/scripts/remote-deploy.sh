@@ -159,9 +159,12 @@ if command -v sudo >/dev/null 2>&1; then
   sudo -n chown -R "$(id -u -n):$(id -g -n)" "$TOP/current/var" "$TOP/portal/var" 2>/dev/null || true
 fi
 # Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony
+# No ocultar fallos: caché basura o permisos suelen causar HTTP 500 en app.mdtprevencion.com
 for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
   [ -f "$_symf/bin/console" ] || continue
-  (cd "$_symf" && php bin/console cache:clear --env=prod --no-warmup) 2>/dev/null || true
+  if ! (cd "$_symf" && php bin/console cache:clear --env=prod --no-warmup); then
+    echo "ERROR: cache:clear falló en $_symf. Prueba: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
+  fi
 done
 if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
   sudo systemctl restart prevencion-admin-agent || true
