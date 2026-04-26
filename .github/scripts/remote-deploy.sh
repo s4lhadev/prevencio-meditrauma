@@ -147,6 +147,16 @@ else
     fi
   done
 fi
+# Fallar el deploy si manifest.json existe pero no es JSON válido (500: JsonManifestVersionStrategy)
+if command -v python3 >/dev/null 2>&1; then
+  for _mf in "$TOP/current/public/build/manifest.json" "$TOP/portal/public/build/manifest.json"; do
+    [ -f "$_mf" ] || continue
+    if ! python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$_mf" 2>/dev/null; then
+      echo "ERROR: manifest.json corrupto o no es JSON válido: $_mf (ejecuta en la VM: cd ... && npm run build)" >&2
+      exit 1
+    fi
+  done
+fi
 if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
   (cd portal/admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
