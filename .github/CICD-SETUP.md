@@ -25,7 +25,11 @@ En la VM: remoto `git@github.com:…` (SSH a GitHub) y, si aplica, `sudo` para e
 
 **HTTP 500 y en el log de Apache: `Unable to write in the "cache" directory` (`var/cache/prod`):** Apache corre como `www-data`; el script deja `var/` con `chown` **usuario_de_deploy:www-data** y directorios `2775` para que el grupo pueda escribir. Hace falta `sudo` (en CI suele ser `sudo -n` → en la VM configura `NOPASSWD` para el usuario de deploy sobre ese path) o, **una vez** a mano: `sudo chown -R deploy:www-data RUTA/current/var` y `sudo find RUTA/current/var -type d -exec chmod 2775 {} \;`. No uses solo `www-data:www-data` en todo el repo o el siguiente `cache:clear` vía deploy puede fallar. En **producción** `APP_ENV=prod`; el `.env` en el server no se commitea.
 
-**El job de deploy debe poder hacer `sudo -n` sin contraseña** (GitHub no es interactivo). Ejemplo en la VM, `visudo` → `sudoers.d/deploy-prevencion`: `administrador ALL=(ALL) NOPASSWD: /bin/chown, /bin/chmod, /usr/bin/chown, /usr/bin/chmod, /usr/bin/find` (o más amplio: `administrador ALL=(ALL) NOPASSWD: ALL` solo si asumes el riesgo). Si el deploy termina "OK" pero el sitio da 500, mira en Actions si el log muestra `ERROR: sudo -n chown falló` o que `current/var` no tiene grupo `www-data`.
+**`ERROR: sudo -n chown falló` en Actions:** el usuario SSH (p. ej. `administrador`) no puede usar `sudo` sin TTY y contraseña. En la VM, como root: `visudo -f /etc/sudoers.d/deploy-prevencion` y añade una línea (ajusta el nombre de usuario; en Debian 12+ comprueba con `type chown` — suele ser `/usr/bin/chown`):
+
+`administrador ALL=(ALL) NOPASSWD: /usr/bin/chown, /bin/chown, /usr/bin/chmod, /bin/chmod, /usr/bin/find`
+
+Hasta eso, tras cada deploy tendrás que ejecutar a mano el `chown`/`find` que imprime el log. Mientras tanto, el job puede quedar en rojo al final del script. Alternativa ancha (solo para desbloquear): `administrador ALL=(ALL) NOPASSWD: ALL` y luego restringe.
 
 **Falta `public/build/manifest.json` (Webpack):** el build debe ejecutarse en el **mismo** directorio que el docroot; si Nginx/Apache apunta a `.../current/public` y en el clone solo hay `portal/`, deja alineado con `cd /ruta/prevencio && ln -sfn portal current`. El script ahora hace `npm run build` en `current/` (primero) y en `portal/`, sin duplicar la misma ruta real. Si aún no hay manifiesto, en la VM: `(cd ruta-symfony && npm ci && npm run build)`.
 

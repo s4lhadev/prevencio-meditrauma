@@ -162,10 +162,21 @@ if command -v python3 >/dev/null 2>&1; then
     fi
   done
 fi
+# venv: si .venv/ existe roto (sin bin/activate), recrear; no basta "test -d .venv"
+_admin_agent_venv() {
+  local d="$1"
+  (cd "$d" && {
+    if [ ! -f .venv/bin/activate ]; then
+      rm -rf .venv
+      python3 -m venv .venv
+    fi
+    [ -f .venv/bin/activate ] && . .venv/bin/activate && pip install -q -r requirements.txt
+  }) 2>/dev/null || true
+}
 if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
-  (cd portal/admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
+  _admin_agent_venv "portal/admin_agent"
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
-  (cd admin_agent && (test -d .venv || python3 -m venv .venv) && . .venv/bin/activate && pip install -q -r requirements.txt) || true
+  _admin_agent_venv "admin_agent"
 fi
 # var/ a veces queda con dueño www-data (deploy anterior); el usuario de deploy no puede crear var/cache → falla console
 # y app.mdtprevencion.com (current) devuelve 500.
