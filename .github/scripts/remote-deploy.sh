@@ -147,6 +147,11 @@ else
     fi
   done
 fi
+# Tras Encore, manifest.json es obligatorio en current/ (config/packages/assets.yaml → json_manifest_path)
+if [ -f "$TOP/current/package.json" ] && [ ! -f "$TOP/current/public/build/manifest.json" ]; then
+  echo "ERROR: falta $TOP/current/public/build/manifest.json tras el build. ¿npm run build no generó public/build/?" >&2
+  exit 1
+fi
 # Fallar el deploy si manifest.json existe pero no es JSON válido (500: JsonManifestVersionStrategy)
 if command -v python3 >/dev/null 2>&1; then
   for _mf in "$TOP/current/public/build/manifest.json" "$TOP/portal/public/build/manifest.json"; do
@@ -200,7 +205,10 @@ fi
 if command -v sudo >/dev/null 2>&1 && getent group "$WEB_USER" >/dev/null 2>&1; then
   for _app in "$TOP/current" "$TOP/portal"; do
     [ -d "$_app" ] || continue
-    sudo -n chown -R "$U:$WEB_USER" "$_app" 2>/dev/null || true
+    if ! sudo -n chown -R "$U:$WEB_USER" "$_app" 2>/dev/null; then
+      echo "ERROR: sudo -n chown falló en $_app (el usuario de deploy necesita NOPASSWD para chown bajo $TOP, o 500 al cargar la web)." >&2
+      exit 1
+    fi
     sudo -n find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
     sudo -n find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
     for _f in "$_app/.env" "$_app/.env.local" "$_app/.env.local.php"; do
@@ -211,5 +219,14 @@ if command -v sudo >/dev/null 2>&1 && getent group "$WEB_USER" >/dev/null 2>&1; 
   if [ -d "$TOP/var" ]; then
     sudo -n chown -R "$U:$WEB_USER" "$TOP/var" 2>/dev/null || true
   fi
+  # Comprobar grupo (sin "sudo -u www-data", que a veces no está en sudoers aunque chown sí)
+  _vg="$(stat -c '%G' "$TOP/current/var" 2>/dev/null || true)"
+  if [ "$_vg" != "$WEB_USER" ]; then
+    echo "ERROR: $TOP/current/var debería tener grupo $WEB_USER; ahora: ${_vg:-desconocido}. Apache no podrá escribir caché (HTTP 500). ve .github/CICD-SETUP.md (NOPASSWD chown)" >&2
+    exit 1
+  fi
+else
+  echo "ERROR: falta sudo o no existe el grupo $WEB_USER; no se pudieron fijar permisos (requerido para Apache + Symfony)." >&2
+  exit 1
 fi
 echo "OK deploy prevencion $TOP"
