@@ -162,16 +162,21 @@ if command -v python3 >/dev/null 2>&1; then
     fi
   done
 fi
-# venv: si .venv/ existe roto (sin bin/activate), recrear; no basta "test -d .venv"
+# venv: si .venv/ existe roto (sin bin/activate), recrear; en Debian hace falta el paquete python3-venv (ensurepip)
 _admin_agent_venv() {
   local d="$1"
   (cd "$d" && {
     if [ ! -f .venv/bin/activate ]; then
       rm -rf .venv
-      python3 -m venv .venv
+      if ! python3 -m venv .venv; then
+        echo "Aviso: no se pudo crear .venv en $d (falta ensurepip)." >&2
+        echo "  En la VM (una vez, como root): apt install -y python3-venv" >&2
+        echo "  — o la variante concreta, p. ej. python3.13-venv, según el mensaje de 'python3 -m venv' arriba." >&2
+        return 0
+      fi
     fi
     [ -f .venv/bin/activate ] && . .venv/bin/activate && pip install -q -r requirements.txt
-  }) 2>/dev/null || true
+  }) || true
 }
 if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
   _admin_agent_venv "portal/admin_agent"
