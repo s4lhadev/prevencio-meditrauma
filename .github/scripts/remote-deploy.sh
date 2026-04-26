@@ -175,7 +175,15 @@ _admin_agent_venv() {
         return 0
       fi
     fi
-    [ -f .venv/bin/activate ] && . .venv/bin/activate && pip install -q -r requirements.txt
+    if [ -f .venv/bin/activate ]; then
+      # shellcheck source=/dev/null
+      . .venv/bin/activate
+      python3 -m pip install -q -U pip setuptools wheel
+      if ! python3 -m pip install -q -r requirements.txt; then
+        echo "Aviso: pip en $d falló. Si compila numpy: apt install -y build-essential pkg-config python3-dev" >&2
+        echo "  (o python3.13-dev) y pega requirements.txt con numpy>=2.1 (rueda en Py3.13, sin compilar)." >&2
+      fi
+    fi
   }) || true
 }
 if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
