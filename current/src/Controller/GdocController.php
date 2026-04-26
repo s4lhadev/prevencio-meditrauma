@@ -48,7 +48,7 @@ class GdocController extends AbstractController
             }
         }
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -231,7 +231,7 @@ class GdocController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -818,7 +818,7 @@ class GdocController extends AbstractController
         $session = $request->getSession();
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -874,7 +874,7 @@ class GdocController extends AbstractController
         $em = $this->getDoctrine()->getManager();
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
         $filtreSemafor = $_REQUEST['fileId'];
@@ -991,7 +991,7 @@ class GdocController extends AbstractController
         $em = $this->getDoctrine()->getManager();
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
         $fileId = $_REQUEST['fileId'];
@@ -1119,7 +1119,7 @@ class GdocController extends AbstractController
         $session = $request->getSession();
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $puestosTrabajoSeleccionadosSelect2 = $_REQUEST['select2'] ?? '';
         $plantillaId = $_REQUEST['plantillaId'];
         $plantilla = $this->getDoctrine()->getRepository('App\Entity\GdocPlantillas')->find($plantillaId);
@@ -1558,7 +1558,7 @@ class GdocController extends AbstractController
         $session = $request->getSession();
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         //eliminar
         $puestosTrabajoSeleccionadosSelect2 = $_REQUEST['select2'] ?? '';
         //$puestosTrabajoSeleccionadosSelect2 = "";
@@ -8382,7 +8382,7 @@ class GdocController extends AbstractController
         }
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
         $mail = $usuario->getMail();
@@ -8499,7 +8499,7 @@ class GdocController extends AbstractController
         }
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
         $passwordMail = $usuario->getPasswordMail();
@@ -8611,7 +8611,7 @@ class GdocController extends AbstractController
         }
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
         $passwordMail = $usuario->getPasswordMail();

@@ -34,7 +34,7 @@ class AgendaTecnicoController extends AbstractController {
         $session = $request->getSession();
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -90,7 +90,7 @@ class AgendaTecnicoController extends AbstractController {
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
 	    //Creamos el objeto
         $tareaTecnico = new TareaTecnico();
@@ -200,7 +200,7 @@ class AgendaTecnicoController extends AbstractController {
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $usuarioId = $usuario->getId();
 
         $query = "select a.id, to_char(a.fechainicio, 'YYYY-mm-dd') as fecha, to_char(a.fechainicio, 'HH24:MI') as hora, to_char(a.fechafin, 'YYYY-mm-dd') as fechafin, to_char(a.fechafin, 'HH24:MI') as horafin,  b.color, a.descripcion from tarea_tecnico a 

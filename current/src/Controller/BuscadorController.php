@@ -26,7 +26,7 @@ class BuscadorController extends AbstractController
 		}
 
 		$user = $this->getUser();
-		$usuario = $this->getDoctrine()->getRepository('App\Entity\User')->find($user);
+		$usuario = $this->getDoctrine()->getRepository('App\Entity\User')->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -55,7 +55,7 @@ class BuscadorController extends AbstractController
 		}
 
 		$user = $this->getUser();
-		$usuario = $this->getDoctrine()->getRepository('App\Entity\User')->find($user);
+		$usuario = $this->getDoctrine()->getRepository('App\Entity\User')->findForSecurityUser($user);
 
 		//Recuperamos las variables disponibles y generamos el array
 		$buscadoresVariablesRepo = $this->getDoctrine()->getRepository('App\Entity\BuscadorVariable');
@@ -241,7 +241,7 @@ class BuscadorController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
 		$queryObj = $this->getDoctrine()->getRepository('App\Entity\BuscadorQueries')->find($id);
 
@@ -360,7 +360,7 @@ class BuscadorController extends AbstractController
 		}
 
 		$user = $this->getUser();
-		$usuario = $this->getDoctrine()->getRepository('App\Entity\User')->find($user);
+		$usuario = $this->getDoctrine()->getRepository('App\Entity\User')->findForSecurityUser($user);
 
 		//Buscamos la consulta
 		$query = $this->getDoctrine()->getRepository('App\Entity\BuscadorQueries')->find($id);

@@ -35,7 +35,7 @@ class CitacionController extends AbstractController {
         $session = $request->getSession();
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -106,7 +106,7 @@ class CitacionController extends AbstractController {
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
         $passwordMail = $usuario->getPasswordMail();
@@ -628,7 +628,7 @@ class CitacionController extends AbstractController {
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
         $empresa = $session->get('empresa');
         $session->set('empresa', null);
@@ -651,7 +651,7 @@ class CitacionController extends AbstractController {
         $session = $request->getSession();
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
         //S'ha modificat la data inicial

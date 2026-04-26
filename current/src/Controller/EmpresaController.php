@@ -191,7 +191,7 @@ class EmpresaController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
         $empresa = $em->getRepository('App\Entity\Empresa')->find($id);
         $session->set('empresa', $empresa);
@@ -557,7 +557,7 @@ class EmpresaController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -611,7 +611,7 @@ class EmpresaController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -670,7 +670,7 @@ class EmpresaController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -793,7 +793,7 @@ class EmpresaController extends AbstractController
         $session = $request->getSession();
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $username = $usuario->getUsername();
 
         $mensaje = "El usuario " . $username . ", ha dado de baja la siguiente empresa: " . $empresa->getEmpresa();
@@ -932,7 +932,7 @@ class EmpresaController extends AbstractController
         $rolId = $privilegios->getId();
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $estadoaux2 = "";
         $empresa = $em->getRepository('App\Entity\Empresa')->find($id);
         if ($empresa) {
@@ -1098,7 +1098,7 @@ class EmpresaController extends AbstractController
                     $estadoaux3 = $empresa2->getEstadoAreaAdministracion()->getId();
                     $user = $this->getUser();
                     $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-                    $usuario = $repository->find($user);
+                    $usuario = $repository->findForSecurityUser($user);
                     $username = $usuario->getUsername();
                     switch ($estadoaux3) {
                         case 4:
@@ -1288,7 +1288,7 @@ class EmpresaController extends AbstractController
         $rolId = $privilegios->getId();
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
 
         $empresa = $em->getRepository('App\Entity\Empresa')->find($id);
         $session->set('empresa', $empresa);
@@ -1671,7 +1671,7 @@ class EmpresaController extends AbstractController
         $rolId = $privilegios->getId();
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
 
         $empresa = $em->getRepository('App\Entity\Empresa')->find($id);
         $session->set('empresa', $empresa);
@@ -1926,7 +1926,7 @@ class EmpresaController extends AbstractController
         $session = $request->getSession();
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $username = $usuario->getUsername();
 
         $mensaje = "El usuario " . $username . ", te ha asignado la siguiente empresa: " . $empresa->getEmpresa();
@@ -2020,7 +2020,7 @@ class EmpresaController extends AbstractController
         $session = $request->getSession();
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $username = $usuario->getUsername();
 
         $mensaje = "El usuario " . $username . ", te ha asignado la siguiente empresa: " . $tecnicoEmpresa->getEmpresa();
@@ -2068,7 +2068,7 @@ class EmpresaController extends AbstractController
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
@@ -2442,7 +2442,7 @@ class EmpresaController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
         $empresa = $em->getRepository('App\Entity\Empresa')->find($id);
         $session->set('empresa', $empresa);
@@ -2473,7 +2473,7 @@ class EmpresaController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
         $empresa = $session->get('empresa');
         $logger = new Logger();
@@ -2955,7 +2955,7 @@ class EmpresaController extends AbstractController
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
         $passwordMail = $usuario->getPasswordMail();
@@ -3126,7 +3126,7 @@ class EmpresaController extends AbstractController
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
         $passwordMail = $usuario->getPasswordMail();
@@ -3284,7 +3284,7 @@ class EmpresaController extends AbstractController
 
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
         $passwordMail = $usuario->getPasswordMail();

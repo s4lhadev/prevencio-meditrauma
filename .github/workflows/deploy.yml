@@ -1,5 +1,5 @@
 # GitHub Actions → Tailscale → SSH. Ver .github/CICD-SETUP.md
-# DEPLOY_HOST: IP 100.x (recomendada). Si usas el nombre (debian), un paso lo resuelve a IP vía `tailscale status` en el runner.
+# DEPLOY_HOST: solo la IPv4 Tailscale del servidor (100.x), p. ej. 100.77.237.64 — no nombres (debian).
 name: Deploy (Tailscale + SSH)
 
 on:
@@ -29,28 +29,18 @@ jobs:
         run: |
           set -e
           RAW='${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}'
-          RAW=$(printf '%s' "$RAW" | tr -d '\r' | xargs)
+          RAW=$(printf '%s' "$RAW" | tr -d '\r' | tr -d '[:space:]' | xargs)
+          case "$RAW" in *=*) RAW="${RAW#*=}"; RAW=$(printf '%s' "$RAW" | tr -d '[:space:]' | xargs) ;; esac
           if [ -z "$RAW" ]; then
-            echo "::error::DEPLOY_HOST vacío. Define secret o variable (IP 100.x, p. ej. 100.77.237.64)"
+            echo "::error::DEPLOY_HOST vacío. Pon solo la IP Tailscale, p. ej. 100.77.237.64"
             exit 1
           fi
-          if echo "$RAW" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-            echo "ip=$RAW" >> "$GITHUB_OUTPUT"
-            echo "SSH host (IP): $RAW"
-            exit 0
-          fi
-          if ! command -v tailscale >/dev/null 2>&1; then
-            echo "::error::tailscale no en PATH. Pon DEPLOY_HOST como IP 100.x (no nombre de máquina)."
+          if ! echo "$RAW" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
+            echo "::error::DEPLOY_HOST debe ser la IPv4 (columna 1 de 'tailscale status' en el Debian). No uses nombres. Ejemplo: 100.77.237.64"
             exit 1
           fi
-          TIP=$(tailscale status 2>/dev/null | awk -v n="$RAW" 'NF >= 2 && $2 == n { print $1; exit }' || true)
-          if [ -n "$TIP" ] && echo "$TIP" | grep -qE '^[0-9]+\.'; then
-            echo "ip=$TIP" >> "$GITHUB_OUTPUT"
-            echo "SSH host: $RAW -> $TIP"
-            exit 0
-          fi
-          echo "::error::No se resolvió $RAW. Pon en DEPLOY_HOST la IP de la columna 1 de 'tailscale status' en el servidor."
-          exit 1
+          echo "ip=$RAW" >> "$GITHUB_OUTPUT"
+          echo "SSH: $RAW"
 
       - name: Add SSH key
         env:

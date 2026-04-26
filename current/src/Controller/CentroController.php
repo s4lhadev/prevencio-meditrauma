@@ -68,7 +68,7 @@ class CentroController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 

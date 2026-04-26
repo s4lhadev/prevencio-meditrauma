@@ -75,7 +75,7 @@ class EvaluacionController extends AbstractController
         }
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
         // Comprobamos si hay una empresa seleccionada
         $empresa = $session->get('empresa');
@@ -198,7 +198,7 @@ class EvaluacionController extends AbstractController
         }
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -254,7 +254,7 @@ class EvaluacionController extends AbstractController
         }
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
         $evaluacion = $this->getDoctrine()->getRepository('App\Entity\Evaluacion')->find($id);
         $session->set('empresa', $evaluacion->getEmpresa());
@@ -782,7 +782,7 @@ class EvaluacionController extends AbstractController
         // Peticio 28/07/2023
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $username = $usuario->getUsername();
         $mail = "mdtmeditrauma@meditrauma.com";
         $emailUser = $usuario->getEmail();

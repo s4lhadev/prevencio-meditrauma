@@ -26,7 +26,7 @@ class QueryController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $usuarioId = $usuario->getId();
 
         //Comprobamos si el usuario pertenece a un grupo de empresas

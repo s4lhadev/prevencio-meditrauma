@@ -67,7 +67,7 @@ class ChangePasswordController extends AbstractController
                 $url = $this->generateUrl('fos_user_profile_show');
 
                 $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-                $usuario = $repository->find($user);
+                $usuario = $repository->findForSecurityUser($user);
                 $usuario->setCredentialsExpired(false);
                 $usuario->setPasswordChangedAt(new \DateTime());
                 $em->persist($usuario);

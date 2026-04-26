@@ -34,7 +34,7 @@ class RemesaController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -126,7 +126,7 @@ class RemesaController extends AbstractController
 
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -224,7 +224,7 @@ class RemesaController extends AbstractController
         $bicMeditrauma = $remesaConfig->getBic();
 
 		$mediaMediaRepo = $this->getDoctrine()->getRepository('App\Application\Sonata\MediaBundle\Entity\Media');
-		$usuario = $this->getDoctrine()->getRepository('App\Entity\User')->find($user);
+		$usuario = $this->getDoctrine()->getRepository('App\Entity\User')->findForSecurityUser($user);
 		$username = $usuario->getUsername();
 
 		$session = $request->getSession();

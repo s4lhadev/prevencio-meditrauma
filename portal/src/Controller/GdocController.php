@@ -28,7 +28,7 @@ class GdocController extends AbstractController
         $hoyString = $hoy->format('YmdHis');
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -320,7 +320,7 @@ class GdocController extends AbstractController
         $hoyString = $hoy->format('YmdHis');
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -421,7 +421,7 @@ class GdocController extends AbstractController
         $hoyString = $hoy->format('YmdHis');
 
         $user = $this->getUser();
-        $usuario = $em->getRepository('App\Entity\User')->find($user);
+        $usuario = $em->getRepository('App\Entity\User')->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 

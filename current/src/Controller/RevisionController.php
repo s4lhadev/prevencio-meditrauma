@@ -57,7 +57,7 @@ class RevisionController extends AbstractController
         $session = $request->getSession();
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -822,7 +822,7 @@ class RevisionController extends AbstractController
         }
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $username = $usuario->getUsername();
 
         $rolId = $privilegios->getId();
@@ -1593,7 +1593,7 @@ class RevisionController extends AbstractController
         }
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
         $passwordMail = $usuario->getPasswordMail();
@@ -1719,7 +1719,7 @@ class RevisionController extends AbstractController
         $session = $request->getSession();
         $user = $this->getUser();
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -1870,7 +1870,7 @@ class RevisionController extends AbstractController
         }
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $mail = $usuario->getMail();
         $emailUser = $usuario->getEmail();
         $passwordMail = $usuario->getPasswordMail();
@@ -2026,7 +2026,7 @@ class RevisionController extends AbstractController
         }
         $repository = $this->getDoctrine()->getRepository('App\Entity\User');
         $user = $this->getUser();
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
 
         $revisionesmarcarEnviadaId = array();
 

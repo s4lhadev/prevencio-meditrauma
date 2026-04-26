@@ -22,7 +22,7 @@ class LoginListener
         $em = $this->em;
         $user = $event->getAuthenticationToken()->getUser();
         $repository = $em->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        $usuario = $repository->findForSecurityUser($user);
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 

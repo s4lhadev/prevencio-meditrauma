@@ -2,10 +2,11 @@
 
 namespace App\Controller;
 
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\Request;
+use App\Entity\User;
 use App\Logger;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 
 class HomeController extends AbstractController
 {
@@ -14,8 +15,14 @@ class HomeController extends AbstractController
         //Recogemos los privilegios del usuario
         $session = $request->getSession();
         $user = $this->getUser();
-        $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        if (!$user instanceof User) {
+            return $this->redirectToRoute('fos_user_security_login');
+        }
+        $repository = $this->getDoctrine()->getRepository(User::class);
+        $usuario = $repository->find($user->getId());
+        if ($usuario === null) {
+            return $this->redirectToRoute('fos_user_security_login');
+        }
 
         //Comprobamos si el usuario tiene la password expirada
         $credentialsExpired = $usuario->getCredentialsExpired();
@@ -303,8 +310,14 @@ class HomeController extends AbstractController
             }
         }
         $user = $this->getUser();
-        $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        if (!$user instanceof User) {
+            return $this->redirectToRoute('fos_user_security_login');
+        }
+        $repository = $this->getDoctrine()->getRepository(User::class);
+        $usuario = $repository->find($user->getId());
+        if ($usuario === null) {
+            return $this->redirectToRoute('fos_user_security_login');
+        }
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -342,8 +355,14 @@ class HomeController extends AbstractController
             }
         }
         $user = $this->getUser();
-        $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        if (!$user instanceof User) {
+            return $this->redirectToRoute('fos_user_security_login');
+        }
+        $repository = $this->getDoctrine()->getRepository(User::class);
+        $usuario = $repository->find($user->getId());
+        if ($usuario === null) {
+            return $this->redirectToRoute('fos_user_security_login');
+        }
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 
@@ -382,8 +401,14 @@ class HomeController extends AbstractController
     function revisionesMensajesInternos()
     {
         $user = $this->getUser();
-        $repository = $this->getDoctrine()->getRepository('App\Entity\User');
-        $usuario = $repository->find($user);
+        if (!$user instanceof User) {
+            return array();
+        }
+        $repository = $this->getDoctrine()->getRepository(User::class);
+        $usuario = $repository->find($user->getId());
+        if ($usuario === null) {
+            return array();
+        }
         $id = $usuario->getId();
         $username = $usuario->getUsername();
 

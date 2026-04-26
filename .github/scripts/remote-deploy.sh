@@ -166,14 +166,27 @@ for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
     echo "ERROR: cache:clear falló en $_symf. Prueba: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
   fi
 done
+# Inmediatamente tras cache:clear, var/ suele quedar u:ug sin grupo www-data → Apache no escribe
+# (RuntimeException: Unable to write in var/cache/prod). Re-aplicar var/ antes del chown total.
+WEB_USER="${DEPLOY_WEB_USER:-www-data}"
+U="$(id -u -n)"
+if command -v sudo >/dev/null 2>&1 && getent group "$WEB_USER" >/dev/null 2>&1; then
+  for _app in "$TOP/current" "$TOP/portal"; do
+    [ -d "$_app/var" ] || continue
+    if sudo -n chown -R "$U:$WEB_USER" "$_app/var" 2>/dev/null; then
+      sudo -n find "$_app/var" -type d -exec chmod 2775 {} \; 2>/dev/null || true
+      sudo -n find "$_app/var" -type f -exec chmod 664 {} \; 2>/dev/null || true
+    else
+      echo "ERROR: sudo -n chown falló en $_app/var. Sin NOPASSWD, fija a mano: sudo chown -R $U:$WEB_USER $_app/var && find $_app/var -type d -exec sudo chmod 2775 {} \\;" >&2
+    fi
+  done
+fi
 if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
   sudo systemctl restart prevencion-admin-agent || true
 fi
 # Apache (www-data) y el usuario de deploy: mismo grupo en todo current/ y portal/
 #  - NUNCA dejar var/ solo como www-data:www-data: el deploy no podrá cache:clear (portal lo mostró)
 #  - Dirs 2775 (setgid) + files 664: www-data (grupo) lee config/, public/build/manifest.json; u escribe en var/
-WEB_USER="${DEPLOY_WEB_USER:-www-data}"
-U="$(id -u -n)"
 if command -v sudo >/dev/null 2>&1 && getent group "$WEB_USER" >/dev/null 2>&1; then
   for _app in "$TOP/current" "$TOP/portal"; do
     [ -d "$_app" ] || continue
