@@ -10,6 +10,18 @@ if (is_array($env = @include dirname(__DIR__).'/.env.local.php') && ($_SERVER['A
     foreach ($env as $k => $v) {
         $_ENV[$k] = $_ENV[$k] ?? (isset($_SERVER[$k]) && 0 !== strpos($k, 'HTTP_') ? $_SERVER[$k] : $v);
     }
+    // Deploy añade APP_CACHE_DIR al .env; composer dump-env no lo copia a .env.local.php.
+    if (empty($_ENV['APP_CACHE_DIR']) && is_readable($pf = dirname(__DIR__).'/.env')) {
+        foreach (file($pf, \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            if (0 === strpos(ltrim($line), '#')) {
+                continue;
+            }
+            if (preg_match('/^(?:export\\s+)?APP_CACHE_DIR=(.*)$/', trim($line), $m)) {
+                $_ENV['APP_CACHE_DIR'] = trim($m[1], " \t\"'");
+                break;
+            }
+        }
+    }
 } elseif (!class_exists(Dotenv::class)) {
     throw new RuntimeException('Please run "composer require symfony/dotenv" to load the ".env" files configuring the application.');
 } else {
