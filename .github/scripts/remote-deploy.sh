@@ -429,8 +429,10 @@ _admin_agent_unit_install_and_restart() {
     fi
   fi
   if [ -x "${agent_dir}/.venv/bin/python" ]; then
-    ( cd "$agent_dir" && nohup .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 9102 \
-        > /tmp/prevencion-admin-agent.log 2>&1 & disown ) || true
+    # setsid + redireccion total + < /dev/null: evita que el SSH del runner se quede colgado
+    # esperando que el hijo cierre su TTY/fd (sintoma: el job de Actions no termina).
+    ( cd "$agent_dir" && setsid nohup .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 9102 \
+        < /dev/null > /tmp/prevencion-admin-agent.log 2>&1 & disown ) || true
     echo "Aviso: uvicorn relanzado a mano (sin systemd). Considera dar NOPASSWD a systemctl para usar la unit." >&2
   else
     echo "Aviso: no hay $agent_dir/.venv/bin/python; uvicorn no se ha (re)arrancado." >&2
