@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from dotenv import load_dotenv
 import httpx
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -15,6 +17,24 @@ from codebase_index import get_index
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+_env_path = Path(__file__).resolve().parent / ".env"
+if _env_path.is_file():
+    # Default load_dotenv(override=False) leaves stale/empty values from systemd/shell;
+    # those would ignore this file and cause 401 even when .env is correct.
+    load_dotenv(_env_path, override=True)
+else:
+    logger.warning("Missing %s — using only process environment (systemd EnvironmentFile, export, etc.)", _env_path)
+
+_admin_secret_len = len((os.getenv("ADMIN_AGENT_SECRET") or "").strip())
+if _admin_secret_len == 0:
+    logger.warning(
+        "ADMIN_AGENT_SECRET is empty — every request with _require_secret will return 401. "
+        "Create %s or set the variable in the service unit.",
+        _env_path,
+    )
+else:
+    logger.info("ADMIN_AGENT_SECRET loaded (length %s)", _admin_secret_len)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
