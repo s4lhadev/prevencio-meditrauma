@@ -333,14 +333,52 @@ _prep_var_before_cache_clear() {
     fi
   done
 }
+# .symfony-cache/ está en .gitignore: persiste entre deploys; Apache llena prod/ como www-data.
+# Sin chown+borrado previo, cache:clear como deploy falla igual que en var/cache.
+_prep_symfony_external_cache_before_clear() {
+  local _app
+  for _app in "$TOP/current" "$TOP/portal"; do
+    [ -d "${_app}/.symfony-cache" ] || continue
+    if _deploy_sudo_chown_r "${_app}/.symfony-cache" "$U_PRE:$G_PRE"; then
+      find "${_app}/.symfony-cache" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+    else
+      echo "Aviso: sudo chown ${_app}/.symfony-cache falló; reparando permisos con find+chmod+chgrp…" >&2
+      if _sudo_repair_dir_group_writable "${_app}/.symfony-cache"; then
+        :
+      else
+        echo "Aviso: sudo chmod/chgrp en ${_app}/.symfony-cache falló (sin NOPASSWD)." >&2
+      fi
+      if ! chown -R "$U_PRE:$G_PRE" "${_app}/.symfony-cache" 2>/dev/null; then
+        echo "Aviso: chown sin sudo en ${_app}/.symfony-cache falló (mezcla www-data)." >&2
+      fi
+      find "${_app}/.symfony-cache" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || {
+        echo "Aviso: rm en ${_app}/.symfony-cache falló; reparación recursiva…" >&2
+        _sudo_repair_dir_group_writable "${_app}/.symfony-cache" || true
+        find "${_app}/.symfony-cache" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+      }
+    fi
+    # Aunque chown al directorio funcione, bajo prod/ puede quedar mezcla www-data; NOPASSWD: find suele permitir -delete.
+    if find "${_app}/.symfony-cache" -mindepth 1 -print -quit | grep -q .; then
+      if ! sudo -n find "${_app}/.symfony-cache" -xdev -mindepth 1 -delete 2>/dev/null; then
+        echo "Aviso: sudo find -delete en ${_app}/.symfony-cache no vació (¿NOPASSWD find?); prueba: usermod -aG $WEB_USER $U_PRE o chown manual." >&2
+      fi
+    fi
+    mkdir -p "${_app}/.symfony-cache"
+    chmod 2775 "${_app}/.symfony-cache" 2>/dev/null || chmod 775 "${_app}/.symfony-cache" || true
+    if ! chgrp "$WEB_USER" "${_app}/.symfony-cache" 2>/dev/null; then
+      chmod 2777 "${_app}/.symfony-cache" 2>/dev/null || true
+    fi
+  done
+}
 _prep_var_before_cache_clear
+_prep_symfony_external_cache_before_clear
 # Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony
 # (también vía CI: GitHub Actions ejecuta este script en la VM; no hace falta cache:clear a mano.)
 # --no-warmup: rápido en deploy; el primer request calienta. Si prefieres cache listo: añade cache:warmup.
 for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
   [ -f "$_symf/bin/console" ] || continue
   if ! _console_cache_clear_prod "$_symf"; then
-    echo "ERROR: cache:clear falló en $_symf. Opciones: (1) NOPASSWD: chown o, como mínimo, find+chmod+chgrp (99-prevencion-deploy), (2) usermod -aG $WEB_USER $(id -u -n) + sesión SSH nueva, (3) una vez: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
+    echo "ERROR: cache:clear falló en $_symf. Revisa permisos en $_symf/var/cache y $_symf/.symfony-cache. Opciones: (1) NOPASSWD: chown o find+chmod+chgrp (99-prevencion-deploy), (2) usermod -aG $WEB_USER $(id -u -n) + sesión SSH nueva, (3) una vez: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var $_symf/.symfony-cache" >&2
     exit 1
   fi
 done
