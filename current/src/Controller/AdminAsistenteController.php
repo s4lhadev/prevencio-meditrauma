@@ -31,20 +31,31 @@ class AdminAsistenteController extends AbstractController
         $this->logger = $logger;
     }
 
+    /**
+     * El logging no debe provocar 500 (handlers sin permiso, syslog lleno, etc.).
+     */
+    private function logAdmin(string $level, string $message, array $context = array()): void
+    {
+        try {
+            $this->logger->log($level, $message, $context);
+        } catch (\Throwable $e) {
+        }
+    }
+
     public function index(Request $request): Response
     {
         $pageKey = trim((string) $this->getParameter('admin_agent.page_key'));
         if ($pageKey === '') {
-            $this->logger->info('admin_asistente.index: page key empty (ADMIN_AGENT_PAGE_KEY not set)');
+            $this->logAdmin('info', 'admin_asistente.index: page key empty (ADMIN_AGENT_PAGE_KEY not set)');
 
             return $this->render('admin_asistente/page_not_configured.html.twig');
         }
         if (!$this->isAgentPageUnlocked($request)) {
-            $this->logger->info('admin_asistente.index: not unlocked, showing form', $this->unlockDebugContext($request, $pageKey));
+            $this->logAdmin('info', 'admin_asistente.index: not unlocked, showing form', $this->unlockDebugContext($request, $pageKey));
 
             return $this->render('admin_asistente/unlock.html.twig');
         }
-        $this->logger->debug('admin_asistente.index: unlocked, rendering assistant', $this->unlockDebugContext($request, $pageKey));
+        $this->logAdmin('debug', 'admin_asistente.index: unlocked, rendering assistant', $this->unlockDebugContext($request, $pageKey));
 
         $base = (string) $this->getParameter('admin_agent.internal_url');
         $secret = (string) $this->getParameter('admin_agent.secret');
@@ -62,13 +73,13 @@ class AdminAsistenteController extends AbstractController
     public function unlock(Request $request): Response
     {
         if (!$request->isMethod('POST')) {
-            $this->logger->warning('admin_asistente.unlock: not POST, redirecting');
+            $this->logAdmin('warning', 'admin_asistente.unlock: not POST, redirecting');
 
             return $this->redirectToRoute('admin_asistente');
         }
         $pageKey = trim((string) $this->getParameter('admin_agent.page_key'));
         if ($pageKey === '') {
-            $this->logger->warning('admin_asistente.unlock: page key not configured');
+            $this->logAdmin('warning', 'admin_asistente.unlock: page key not configured');
             $this->addFlash('error', 'Falta ADMIN_AGENT_PAGE_KEY en .env.');
 
             return $this->redirectToRoute('admin_asistente');
@@ -76,7 +87,7 @@ class AdminAsistenteController extends AbstractController
         $csrfToken = (string) $request->request->get('_csrf_token', '');
         $csrfOk = $this->isCsrfTokenValid('admin_asistente_unlock', $csrfToken);
         if (!$csrfOk) {
-            $this->logger->warning('admin_asistente.unlock: CSRF failed', array_merge(
+            $this->logAdmin('warning', 'admin_asistente.unlock: CSRF failed', array_merge(
                 $this->unlockDebugContext($request, $pageKey),
                 array('csrf_token_len' => strlen($csrfToken))
             ));
@@ -90,7 +101,7 @@ class AdminAsistenteController extends AbstractController
         $lenMatch = $keyLen === $subLen;
         $hashMatch = $lenMatch && hash_equals($pageKey, $submitted);
         if (!$hashMatch) {
-            $this->logger->info('admin_asistente.unlock: key mismatch (lengths or hash)', array_merge(
+            $this->logAdmin('info', 'admin_asistente.unlock: key mismatch (lengths or hash)', array_merge(
                 $this->unlockDebugContext($request, $pageKey),
                 array('key_len' => $keyLen, 'submitted_len' => $subLen, 'length_match' => $lenMatch)
             ));
@@ -102,7 +113,7 @@ class AdminAsistenteController extends AbstractController
         $session->set(self::SESSION_PAGE_UNLOCK, true);
         $session->save();
 
-        $this->logger->info('admin_asistente.unlock: success, session+redirect+cookie', $this->unlockDebugContext($request, $pageKey));
+        $this->logAdmin('info', 'admin_asistente.unlock: success, session+redirect+cookie', $this->unlockDebugContext($request, $pageKey));
 
         $this->addFlash('success', 'Acceso al asistente activado.');
 
@@ -247,7 +258,7 @@ class AdminAsistenteController extends AbstractController
         }
 
         if ((bool) $request->getSession()->get(self::SESSION_PAGE_UNLOCK)) {
-            $this->logger->debug('admin_asistente.isUnlocked: true via session', $this->unlockDebugContext($request, $pageKey));
+            $this->logAdmin('debug', 'admin_asistente.isUnlocked: true via session', $this->unlockDebugContext($request, $pageKey));
 
             return true;
         }
@@ -256,14 +267,14 @@ class AdminAsistenteController extends AbstractController
         $fromCookie = (string) $request->cookies->get(self::UNLOCK_COOKIE, '');
         if ($fromCookie === '' || !hash_equals($expected, $fromCookie)) {
             $hmacEqual = $fromCookie !== '' && hash_equals($expected, $fromCookie);
-            $this->logger->notice('admin_asistente.isUnlocked: false (no session, cookie bad/missing)', array_merge(
+            $this->logAdmin('notice', 'admin_asistente.isUnlocked: false (no session, cookie bad/missing)', array_merge(
                 $this->unlockDebugContext($request, $pageKey),
                 array('cookie_len' => strlen($fromCookie), 'hmac_match' => $hmacEqual)
             ));
 
             return false;
         }
-        $this->logger->info('admin_asistente.isUnlocked: true via cookie, syncing session', $this->unlockDebugContext($request, $pageKey));
+        $this->logAdmin('info', 'admin_asistente.isUnlocked: true via cookie, syncing session', $this->unlockDebugContext($request, $pageKey));
         $request->getSession()->set(self::SESSION_PAGE_UNLOCK, true);
 
         return true;

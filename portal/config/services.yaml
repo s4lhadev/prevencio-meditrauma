@@ -24,7 +24,11 @@ services:
         tags: ['controller.service_arguments']
 
     App\Controller\AdminAsistenteController:
-        $logger: '@monolog.logger.admin_asistente'
+        autowire: true
+        autoconfigure: true
+        arguments:
+            $logger: '@monolog.logger.admin_asistente'
+        tags: ['controller.service_arguments']
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

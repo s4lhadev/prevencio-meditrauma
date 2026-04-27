@@ -1,10 +1,9 @@
 monolog:
     channels: [admin_asistente]
     handlers:
-        # Siempre a disco (fingers_crossed de main no aplica) — /agent desbloqueo
+        # error_log: no depende de permisos sobre var/log/*.log (evita 500 si falla StreamHandler)
         admin_asistente_file:
-            type: stream
-            path: "%kernel.logs_dir%/admin_asistente.log"
+            type: error_log
             level: debug
             channels: [admin_asistente]
         main:
