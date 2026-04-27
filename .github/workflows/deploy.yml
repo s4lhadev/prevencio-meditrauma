@@ -75,4 +75,5 @@ jobs:
             env \
               "INFISICAL_TOKEN=${INFISICAL_TOKEN:-}" \
               "APP_PRODUCT_OVERRIDE=prevencion" \
+              "DEPLOY_SYMFONY_CACHE_STAMP=${{ github.run_id }}" \
             bash -s "$P" "$REPO" "$BR" < .github/scripts/remote-deploy.sh

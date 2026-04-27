@@ -22,6 +22,11 @@ else
   cd "$TOP"
 fi
 
+# Caché Symfony en .symfony-cache/run-<id>/ (id único por ejecución): evita cache:clear sobre ficheros www-data
+# cuando sudo no puede chown/rm (ver deploy.yml: DEPLOY_SYMFONY_CACHE_STAMP).
+: "${DEPLOY_SYMFONY_CACHE_STAMP:=${GITHUB_RUN_ID:-$(date +%s)}}"
+export DEPLOY_SYMFONY_CACHE_STAMP
+
 WEB_USER="${DEPLOY_WEB_USER:-www-data}"
 
 # secure_path de sudo a veces no incluye chown; 99-prevencion-deploy lista /usr/bin/chown y /bin/chown explícitos.
@@ -67,13 +72,13 @@ _sudo_repair_dir_group_writable() {
   sudo -n chgrp -R "$WEB_USER" "$root" 2>/dev/null
 }
 
-# Caché del kernel en .symfony-cache/ + APP_CACHE_DIR en .env (cache:clear sin tocar var/cache de www-data).
-# Con .env.local.php (composer dump-env), bootstrap.php no lee .env → APP_CACHE_DIR en .env se ignora.
-# Exportar APP_CACHE_DIR en esta sesión antes de composer/console para que Kernel use .symfony-cache/.
+# Caché del kernel: .symfony-cache/run-<STAMP>/ + APP_CACHE_DIR en .env (STAMP único → dir vacío sin sudo rm).
+# Con .env.local.php, bootstrap.php fusiona APP_CACHE_DIR desde .env; export aquí para composer/console.
 _export_app_cache_dir_if_present() {
   local app_root="$1"
-  [ -d "${app_root}/.symfony-cache" ] || return 0
-  APP_CACHE_DIR="$(cd "${app_root}/.symfony-cache" && pwd -P)"
+  local xcd="${app_root}/.symfony-cache/run-${DEPLOY_SYMFONY_CACHE_STAMP}"
+  [ -d "$xcd" ] || return 0
+  APP_CACHE_DIR="$(cd "$xcd" && pwd -P)"
   export APP_CACHE_DIR
 }
 
@@ -81,7 +86,7 @@ _symfony_external_cache_setup() {
   local app="$1"
   [ -d "$app" ] || return 0
   [ -f "$app/bin/console" ] || return 0
-  local xcd="${app}/.symfony-cache"
+  local xcd="${app}/.symfony-cache/run-${DEPLOY_SYMFONY_CACHE_STAMP}"
   mkdir -p "$xcd"
   chmod 2775 "$xcd" 2>/dev/null || chmod 775 "$xcd" || true
   if ! chgrp "$WEB_USER" "$xcd" 2>/dev/null; then
@@ -103,7 +108,7 @@ _symfony_external_cache_setup() {
     grep -v '^[[:space:]]*APP_CACHE_DIR=' "$envf" > "${envf}.new.pcache" && mv "${envf}.new.pcache" "$envf"
   fi
   printf 'APP_CACHE_DIR=%s\n' "$abs" >> "$envf"
-  echo "APP_CACHE_DIR=$abs ($(basename "$app"))" >&2
+  echo "APP_CACHE_DIR=$abs ($(basename "$app"); stamp=$DEPLOY_SYMFONY_CACHE_STAMP)" >&2
 }
 
 _console_cache_clear_prod() {
@@ -177,7 +182,7 @@ git reset --hard "origin/${BRANCH}"
 if [ -f "$TOP/.github/scripts/infisical-admin-agent-env.sh" ]; then
   bash "$TOP/.github/scripts/infisical-admin-agent-env.sh" "$TOP" || exit 1
 fi
-# Sin sudo NOPASSWD, var/cache no se puede vaciar; el kernel usa APP_CACHE_DIR → .symfony-cache/ (ver src/Kernel.php).
+# Sin sudo NOPASSWD, var/cache no se vacía bien; APP_CACHE_DIR → .symfony-cache/run-<stamp>/ (nuevo por deploy; ver Kernel.php).
 for _extc in "$TOP/current" "$TOP/portal"; do
   [ -f "$_extc/bin/console" ] || continue
   _symfony_external_cache_setup "$_extc"
@@ -333,52 +338,14 @@ _prep_var_before_cache_clear() {
     fi
   done
 }
-# .symfony-cache/ está en .gitignore: persiste entre deploys; Apache llena prod/ como www-data.
-# Sin chown+borrado previo, cache:clear como deploy falla igual que en var/cache.
-_prep_symfony_external_cache_before_clear() {
-  local _app
-  for _app in "$TOP/current" "$TOP/portal"; do
-    [ -d "${_app}/.symfony-cache" ] || continue
-    if _deploy_sudo_chown_r "${_app}/.symfony-cache" "$U_PRE:$G_PRE"; then
-      find "${_app}/.symfony-cache" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
-    else
-      echo "Aviso: sudo chown ${_app}/.symfony-cache falló; reparando permisos con find+chmod+chgrp…" >&2
-      if _sudo_repair_dir_group_writable "${_app}/.symfony-cache"; then
-        :
-      else
-        echo "Aviso: sudo chmod/chgrp en ${_app}/.symfony-cache falló (sin NOPASSWD)." >&2
-      fi
-      if ! chown -R "$U_PRE:$G_PRE" "${_app}/.symfony-cache" 2>/dev/null; then
-        echo "Aviso: chown sin sudo en ${_app}/.symfony-cache falló (mezcla www-data)." >&2
-      fi
-      find "${_app}/.symfony-cache" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || {
-        echo "Aviso: rm en ${_app}/.symfony-cache falló; reparación recursiva…" >&2
-        _sudo_repair_dir_group_writable "${_app}/.symfony-cache" || true
-        find "${_app}/.symfony-cache" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
-      }
-    fi
-    # Aunque chown al directorio funcione, bajo prod/ puede quedar mezcla www-data; NOPASSWD: find suele permitir -delete.
-    if find "${_app}/.symfony-cache" -mindepth 1 -print -quit | grep -q .; then
-      if ! sudo -n find "${_app}/.symfony-cache" -xdev -mindepth 1 -delete 2>/dev/null; then
-        echo "Aviso: sudo find -delete en ${_app}/.symfony-cache no vació (¿NOPASSWD find?); prueba: usermod -aG $WEB_USER $U_PRE o chown manual." >&2
-      fi
-    fi
-    mkdir -p "${_app}/.symfony-cache"
-    chmod 2775 "${_app}/.symfony-cache" 2>/dev/null || chmod 775 "${_app}/.symfony-cache" || true
-    if ! chgrp "$WEB_USER" "${_app}/.symfony-cache" 2>/dev/null; then
-      chmod 2777 "${_app}/.symfony-cache" 2>/dev/null || true
-    fi
-  done
-}
 _prep_var_before_cache_clear
-_prep_symfony_external_cache_before_clear
 # Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony
 # (también vía CI: GitHub Actions ejecuta este script en la VM; no hace falta cache:clear a mano.)
 # --no-warmup: rápido en deploy; el primer request calienta. Si prefieres cache listo: añade cache:warmup.
 for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
   [ -f "$_symf/bin/console" ] || continue
   if ! _console_cache_clear_prod "$_symf"; then
-    echo "ERROR: cache:clear falló en $_symf. Revisa permisos en $_symf/var/cache y $_symf/.symfony-cache. Opciones: (1) NOPASSWD: chown o find+chmod+chgrp (99-prevencion-deploy), (2) usermod -aG $WEB_USER $(id -u -n) + sesión SSH nueva, (3) una vez: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var $_symf/.symfony-cache" >&2
+    echo "ERROR: cache:clear falló en $_symf. Revisa $_symf/var/cache. Caché kernel: $_symf/.symfony-cache/run-* (stamp=$DEPLOY_SYMFONY_CACHE_STAMP). Opciones: NOPASSWD chown (99-prevencion-deploy), usermod -aG $WEB_USER $(id -u -n), o sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
     exit 1
   fi
 done
