@@ -38,6 +38,13 @@
     <h1>Asistente (Prevención)</h1>
     <p class="sub">Uso interno. Tráfico al servicio <code>admin_agent</code> (puerto 9102) y a OpenRouter.</p>
 
+    {% for message in app.flashes('success') %}
+        <div class="banner" style="background: rgba(43,182,115,0.12); border-color: rgba(43,182,115,0.45); color: #7ee2b8;">{{ message }}</div>
+    {% endfor %}
+    {% for message in app.flashes('error') %}
+        <div class="banner">{{ message }}</div>
+    {% endfor %}
+
     {% if not assistant_configured %}
         <div class="banner">
             Configura <code>ADMIN_AGENT_INTERNAL_URL</code> y <code>ADMIN_AGENT_SECRET</code> en <code>.env</code> y arranca uvicorn. Ver <code>admin_agent/README.md</code>.

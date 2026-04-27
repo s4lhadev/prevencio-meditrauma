@@ -54,13 +54,17 @@ class AdminAsistenteController extends AbstractController
 
             return $this->redirectToRoute('admin_asistente');
         }
-        $submitted = (string) $request->request->get('key', '');
+        $submitted = trim((string) $request->request->get('key', ''));
         if (!hash_equals($pageKey, $submitted)) {
             $this->addFlash('error', 'Clave incorrecta.');
 
             return $this->redirectToRoute('admin_asistente');
         }
-        $request->getSession()->set(self::SESSION_PAGE_UNLOCK, true);
+        $session = $request->getSession();
+        $session->set(self::SESSION_PAGE_UNLOCK, true);
+        $session->save();
+
+        $this->addFlash('success', 'Acceso al asistente activado.');
 
         return $this->redirectToRoute('admin_asistente');
     }
