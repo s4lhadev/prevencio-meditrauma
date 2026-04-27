@@ -11,6 +11,16 @@ if [ -z "$REPO_ROOT" ] || [ ! -d "$REPO_ROOT/.git" ]; then
 fi
 REPO_ROOT="$(cd "$REPO_ROOT" && pwd -P)"
 
+# Tras = en .env: "" , '' o solo espacios no son "presentes" (Infisical suele poner comillas y '' vacío)
+_is_dotenv_value_empty() {
+  local s
+  s=$(printf '%s' "$1" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  [ -z "$s" ] && return 0
+  [ "$s" = "''" ] && return 0
+  [ "$s" = '""' ] && return 0
+  return 1
+}
+
 if [ -z "${INFISICAL_TOKEN:-}" ]; then
   echo "Aviso: INFISICAL_TOKEN no definido; se conserva admin_agent/.env local si existe."
   exit 0
@@ -151,6 +161,9 @@ _merge_symfony_dotenv_from_admin_agent() {
     line=$(grep -m1 "^[[:space:]]*${k}=" "$agent_env" 2>/dev/null || true)
     [ -n "$line" ] || continue
     v="${line#*=}"
+    if [ "$k" = "ADMIN_AGENT_PAGE_KEY" ] && _is_dotenv_value_empty "$v"; then
+      continue
+    fi
     for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
       [ -f "$f" ] || continue
       if grep -q "^[[:space:]]*${k}=" "$f" 2>/dev/null; then
@@ -173,9 +186,10 @@ _ensure_page_key_in_php_env_from_dist() {
     val=""
     if grep -qE '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null; then
       val=$(grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null | cut -d= -f2-)
-      val=$(printf '%s' "$val" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     fi
-    [ -n "$val" ] && continue
+    if ! _is_dotenv_value_empty "$val"; then
+      continue
+    fi
     if grep -qE '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null; then
       grep -v '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" > "${f}.new" 2>/dev/null || : > "${f}.new"
       mv "${f}.new" "$f"
