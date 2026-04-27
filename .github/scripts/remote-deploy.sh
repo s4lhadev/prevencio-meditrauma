@@ -429,11 +429,24 @@ _admin_agent_unit_install_and_restart() {
     fi
   fi
   if [ -x "${agent_dir}/.venv/bin/python" ]; then
-    # setsid + redireccion total + < /dev/null: evita que el SSH del runner se quede colgado
-    # esperando que el hijo cierre su TTY/fd (sintoma: el job de Actions no termina).
-    ( cd "$agent_dir" && setsid nohup .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 9102 \
-        < /dev/null > /tmp/prevencion-admin-agent.log 2>&1 & disown ) || true
-    echo "Aviso: uvicorn relanzado a mano (sin systemd). Considera dar NOPASSWD a systemctl para usar la unit." >&2
+    # SSH del runner cuelga si el hijo hereda fds del workflow. Probamos en orden:
+    #   1) systemd-run --user (transient unit; daemonizado de verdad)
+    #   2) setsid -f (fork + nueva sesion; cierra todo el TTY)
+    #   3) nohup clasico con todos los fds cerrados (3..255) y stdin de /dev/null
+    if command -v systemd-run >/dev/null 2>&1 \
+        && systemd-run --user --quiet --unit=prevencion-admin-agent \
+            --working-directory="$agent_dir" \
+            "$agent_dir/.venv/bin/python" -m uvicorn app:app --host 127.0.0.1 --port 9102 2>/dev/null; then
+      echo "Aviso: uvicorn arrancado via systemd-run --user (sin sudo). Instala el sudoers para usar la unit del sistema." >&2
+    elif command -v setsid >/dev/null 2>&1; then
+      ( cd "$agent_dir" && setsid -f .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 9102 \
+          < /dev/null > /tmp/prevencion-admin-agent.log 2>&1 ) || true
+      echo "Aviso: uvicorn relanzado con setsid -f (sin systemd). Instala el sudoers para usar la unit del sistema." >&2
+    else
+      ( cd "$agent_dir" && nohup .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 9102 \
+          < /dev/null > /tmp/prevencion-admin-agent.log 2>&1 & disown ) >/dev/null 2>&1 || true
+      echo "Aviso: uvicorn relanzado con nohup (sin setsid/systemd). Si el job de Actions cuelga, instala el sudoers." >&2
+    fi
   else
     echo "Aviso: no hay $agent_dir/.venv/bin/python; uvicorn no se ha (re)arrancado." >&2
   fi
