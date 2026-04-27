@@ -182,6 +182,14 @@ git reset --hard "origin/${BRANCH}"
 if [ -f "$TOP/.github/scripts/infisical-admin-agent-env.sh" ]; then
   bash "$TOP/.github/scripts/infisical-admin-agent-env.sh" "$TOP" || exit 1
 fi
+# .env.local.php (composer dump-env) puede tener un ADMIN_AGENT_SECRET viejo y pisar el nuevo de .env
+# (bootstrap.php carga .env.local.php y no relee .env). Borrarlo aquí evita 401 entre PHP y uvicorn.
+# bootstrap.php cae en Dotenv y carga .env tranquilamente; no hace falta regenerar el dump.
+for _envcache in "$TOP/current/.env.local.php" "$TOP/portal/.env.local.php"; do
+  if [ -f "$_envcache" ]; then
+    rm -f "$_envcache" && echo "Eliminado $_envcache (evita ADMIN_AGENT_SECRET cacheado obsoleto)." >&2 || true
+  fi
+done
 # Sin sudo NOPASSWD, var/cache no se vacía bien; APP_CACHE_DIR → .symfony-cache/run-<stamp>/ (nuevo por deploy; ver Kernel.php).
 for _extc in "$TOP/current" "$TOP/portal"; do
   [ -f "$_extc/bin/console" ] || continue

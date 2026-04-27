@@ -10,16 +10,32 @@ if (is_array($env = @include dirname(__DIR__).'/.env.local.php') && ($_SERVER['A
     foreach ($env as $k => $v) {
         $_ENV[$k] = $_ENV[$k] ?? (isset($_SERVER[$k]) && 0 !== strpos($k, 'HTTP_') ? $_SERVER[$k] : $v);
     }
-    // Deploy añade APP_CACHE_DIR al .env; composer dump-env no lo copia a .env.local.php.
-    if (empty($_ENV['APP_CACHE_DIR']) && is_readable($pf = dirname(__DIR__).'/.env')) {
-        foreach (file($pf, \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-            if (0 === strpos(ltrim($line), '#')) {
+    // El deploy sincroniza estos valores en .env (admin_agent → Symfony, APP_CACHE_DIR por run).
+    // Sin esta sobreescritura, .env.local.php / $_SERVER / process env mantienen valores viejos
+    // y provocan agent_unauthorized aunque .env esté correcto.
+    $envFile = dirname(__DIR__).'/.env';
+    if (is_readable($envFile)) {
+        $dynamicKeys = ['ADMIN_AGENT_INTERNAL_URL', 'ADMIN_AGENT_SECRET', 'ADMIN_AGENT_PAGE_KEY', 'APP_CACHE_DIR'];
+        $keysSet = array_flip($dynamicKeys);
+        foreach (file($envFile, \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $trimmed = ltrim($line);
+            if ('' === $trimmed || '#' === $trimmed[0]) {
                 continue;
             }
-            if (preg_match('/^(?:export\\s+)?APP_CACHE_DIR=(.*)$/', trim($line), $m)) {
-                $_ENV['APP_CACHE_DIR'] = trim($m[1], " \t\"'");
-                break;
+            if (!preg_match('/^(?:export\\s+)?([A-Z_][A-Z0-9_]*)=(.*)$/', trim($line), $m)) {
+                continue;
             }
+            $key = $m[1];
+            if (!isset($keysSet[$key])) {
+                continue;
+            }
+            $val = trim($m[2]);
+            if ('' !== $val && ('"' === $val[0] || "'" === $val[0])) {
+                $val = trim($val, $val[0]);
+            }
+            $_ENV[$key] = $val;
+            $_SERVER[$key] = $val;
+            putenv($key.'='.$val);
         }
     }
 } elseif (!class_exists(Dotenv::class)) {

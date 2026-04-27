@@ -41,9 +41,40 @@ class AdminAsistenteController extends AbstractController
         }
     }
 
+    /** Trim como Python (.strip()). Si el container quedó cacheado con un secret obsoleto, lee .env "vivo". */
     private function adminAgentSecret(): string
     {
-        return trim((string) $this->getParameter('admin_agent.secret'));
+        $fromContainer = trim((string) $this->getParameter('admin_agent.secret'));
+        if ($fromContainer !== '' && $fromContainer !== 'change_me_match_admin_agent_env') {
+            return $fromContainer;
+        }
+        $envFile = $this->getParameter('kernel.project_dir').'/.env';
+        if (!is_readable($envFile)) {
+            return $fromContainer;
+        }
+        foreach (file($envFile, \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES) ?: array() as $line) {
+            $t = ltrim($line);
+            if ($t === '' || $t[0] === '#') {
+                continue;
+            }
+            if (preg_match('/^(?:export\\s+)?ADMIN_AGENT_SECRET=(.*)$/', trim($line), $m)) {
+                $val = trim($m[1]);
+                if ($val !== '' && ($val[0] === '"' || $val[0] === "'")) {
+                    $val = trim($val, $val[0]);
+                }
+                return trim($val);
+            }
+        }
+        return $fromContainer;
+    }
+
+    /** Pista forense para 401 sin filtrar el secret: longitud + 8 hex de SHA-256. */
+    private function adminAgentSecretFingerprint(string $secret): string
+    {
+        if ($secret === '') {
+            return 'empty';
+        }
+        return 'len='.strlen($secret).' sha256_8='.substr(hash('sha256', $secret), 0, 8);
     }
 
     public function index(Request $request): Response
@@ -186,7 +217,7 @@ class AdminAsistenteController extends AbstractController
             'content' => json_encode($payload),
             'timeout' => 130,
         ));
-        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?');
+        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?', $internalSecret);
         if (null !== $fail) {
             return $fail;
         }
@@ -215,7 +246,7 @@ class AdminAsistenteController extends AbstractController
             'header' => "X-Admin-Agent-Secret: ".$internalSecret."\r\n",
             'timeout' => 30,
         ));
-        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?');
+        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?', $internalSecret);
         if (null !== $fail) {
             return $fail;
         }
@@ -253,7 +284,7 @@ class AdminAsistenteController extends AbstractController
             'content' => json_encode(array('full' => $full)),
             'timeout' => 600,
         ));
-        $fail = $this->adminAgentFailureResponse($fetch, 'Timeout o servicio detenido');
+        $fail = $this->adminAgentFailureResponse($fetch, 'Timeout o servicio detenido', $internalSecret);
         if (null !== $fail) {
             return $fail;
         }
@@ -292,15 +323,21 @@ class AdminAsistenteController extends AbstractController
     /**
      * @param array{body: string|false, status: int|null} $fetch
      */
-    private function adminAgentFailureResponse(array $fetch, string $unreachableDetail): ?JsonResponse
+    private function adminAgentFailureResponse(array $fetch, string $unreachableDetail, string $secretSent = ''): ?JsonResponse
     {
         if (false === $fetch['body']) {
             return new JsonResponse(array('error' => 'agent_unreachable', 'detail' => $unreachableDetail), 502);
         }
         if (401 === $fetch['status']) {
+            $fp = $this->adminAgentSecretFingerprint($secretSent);
+            $this->logAdmin('error', 'admin_asistente: agent_unauthorized (Symfony→uvicorn 401)', array(
+                'secret_sent' => $fp,
+                'tip' => 'compara con: cd portal/admin_agent && python3 -c "import os; from dotenv import load_dotenv; load_dotenv(\".env\", override=True); s=os.getenv(\"ADMIN_AGENT_SECRET\",\"\").strip(); import hashlib; print(\"len=\",len(s),\"sha256_8=\",hashlib.sha256(s.encode()).hexdigest()[:8])"',
+            ));
             return new JsonResponse(array(
                 'error' => 'agent_unauthorized',
-                'detail' => 'ADMIN_AGENT_SECRET: misma cadena exacta en portal/admin_agent/.env y current/.env (y portal/.env si aplica). Revisa .env.local / .env.local.php (pueden pisar). Tras alinear: cache:clear y reiniciar uvicorn. Deploy fusiona desde admin_agent si hay INFISICAL_TOKEN o admin_agent/.env.',
+                'php_secret_fingerprint' => $fp,
+                'detail' => 'PHP envió un ADMIN_AGENT_SECRET distinto al de uvicorn. Compara este fingerprint con el del .env del agente; tras alinear ambos: borra .env.local.php (rm portal/.env.local.php current/.env.local.php), cache:clear, y reinicia uvicorn (systemctl restart prevencion-admin-agent).',
             ), 502);
         }
         if (null !== $fetch['status'] && $fetch['status'] >= 400) {
