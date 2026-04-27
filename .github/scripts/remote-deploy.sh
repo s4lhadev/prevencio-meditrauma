@@ -191,33 +191,25 @@ if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
   _admin_agent_venv "admin_agent"
 fi
-# var/ a menudo mezcla dueños: php-fpm escribe caché como www-data; cache:clear como usuario de deploy no puede hacer unlink.
-# NOPASSWD en 99-prevencion-deploy NO suele incluir `true`: no uses `sudo -n true` como prueba (falso negativo).
+# var/ a menudo mezcla dueños: php-fpm escribe caché como www-data; cache:clear necesita poder borrar/crear dentro de var/cache.
+# No uses un "probe" con sudo find: en algunas VM falla y el ramal sin sudo deja prod/ no escribible (Doctrine Proxies).
+# Basta NOPASSWD para chown (99-prevencion-deploy): chown -R var luego rm -rf var/cache sin sudo.
 U_PRE="$(id -u -n)"
 G_PRE="$(id -g -n)"
-_sudo_nopasswd_for_deploy() {
-  command -v sudo >/dev/null 2>&1 || return 1
-  sudo -n find "$TOP" -maxdepth 0 >/dev/null 2>&1
-}
 _prep_var_before_cache_clear() {
   local _app
   for _app in "$TOP/current" "$TOP/portal"; do
     [ -d "$_app" ] || continue
     mkdir -p "$_app/var" 2>/dev/null || true
-    if _sudo_nopasswd_for_deploy; then
-      sudo -n chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null || true
-      if [ -d "$_app/var/cache" ]; then
-        sudo -n find "$_app/var/cache" -mindepth 1 -delete 2>/dev/null || true
-      fi
+    if sudo -n chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null; then
+      rm -rf "$_app/var/cache"
       mkdir -p "$_app/var/cache"
-      sudo -n chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null || true
     else
+      echo "Aviso: sudo -n chown -R $U_PRE:$G_PRE $_app/var falló (¿sin NOPASSWD chown? ver CICD-SETUP / 99-prevencion-deploy)." >&2
       if ! chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null; then
-        echo "Aviso: chown $_app/var sin sudo falló (mezcla www-data). Si cache:clear falla: NOPASSWD find/chown (CICD-SETUP) o usermod -aG www-data $U_PRE." >&2
+        echo "Aviso: chown sin sudo también falló (mezcla www-data). cache:clear puede fallar; usermod -aG www-data $U_PRE o sudo chown -R en la VM." >&2
       fi
-      if [ -d "$_app/var/cache" ]; then
-        find "$_app/var/cache" -mindepth 1 -delete 2>/dev/null || true
-      fi
+      rm -rf "$_app/var/cache" 2>/dev/null || true
       mkdir -p "$_app/var/cache"
     fi
   done
