@@ -22,6 +22,43 @@ else
   cd "$TOP"
 fi
 
+WEB_USER="${DEPLOY_WEB_USER:-www-data}"
+
+# secure_path de sudo a veces no incluye chown; 99-prevencion-deploy lista /usr/bin/chown y /bin/chown explícitos.
+# Con DEPLOY_SUDO_DEBUG=1 (variable en el paso SSH del workflow) se imprime sudo -l si falla.
+_deploy_sudo_chown_r() {
+  local target="$1"
+  local ug="$2"
+  [ -e "$target" ] || return 1
+  local _ch
+  for _ch in /usr/bin/chown /bin/chown; do
+    [ -x "$_ch" ] || continue
+    if sudo -n "$_ch" -R "$ug" "$target" 2>/dev/null; then
+      return 0
+    fi
+  done
+  if sudo -n chown -R "$ug" "$target" 2>/dev/null; then
+    return 0
+  fi
+  if [ "${DEPLOY_SUDO_DEBUG:-}" = 1 ]; then
+    echo "DEPLOY_SUDO_DEBUG: sudo -l (comprueba NOPASSWD y rutas de chown)" >&2
+    sudo -n -l 2>&1 | head -40 >&2 || true
+  fi
+  return 1
+}
+
+_console_cache_clear_prod() {
+  local d="$1"
+  (cd "$d" && php bin/console cache:clear --env=prod --no-warmup) && return 0
+  if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx "$WEB_USER"; then
+    if command -v sg >/dev/null 2>&1; then
+      echo "Aviso: cache:clear en $d falló como $(id -u -n); reintento con sg $WEB_USER (ver CICD-SETUP: usermod -aG $WEB_USER)." >&2
+      (cd "$d" && sg "$WEB_USER" -c "php bin/console cache:clear --env=prod --no-warmup") && return 0
+    fi
+  fi
+  return 1
+}
+
 # Solo GitHub: fichero dedicado. Claves oficiales: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
 _gh_known_hosts_file() {
   local f="$HOME/.ssh/known_hosts.github"
@@ -58,10 +95,15 @@ if ! git show-ref --verify --quiet "refs/remotes/origin/${BRANCH}"; then
   exit 1
 fi
 # Si php/nginx escribió en portal/public/ como www-data, git no puede "unlink" sin ser dueño
+U_DEPLOY="$(id -u -n):$(id -g -n)"
+mkdir -p "$TOP/current/var" "$TOP/portal/var" 2>/dev/null || true
 if command -v sudo >/dev/null 2>&1; then
-  sudo -n chown -R "$(id -u -n):$(id -g -n)" "$TOP" 2>/dev/null || {
-    echo "Falta poder hacer chown del árbol (p. ej. sudo sin contraseña) o ejecuta UNA VEZ en el servidor:"
-    echo "  sudo chown -R $(id -u -n):$(id -g -n) $TOP"
+  if ! _deploy_sudo_chown_r "$TOP" "$U_DEPLOY"; then
+    echo "Aviso: sudo chown -R del repo falló (¿NOPASSWD? ¿Defaults requiretty? CICD-SETUP; prueba env DEPLOY_SUDO_DEBUG=1 en SSH)." >&2
+  fi
+else
+  chown -R "$U_DEPLOY" "$TOP" 2>/dev/null || {
+    echo "Falta sudo o chown: no se pudo normalizar dueños de $TOP" >&2
   }
 fi
 git checkout "$BRANCH" 2>/dev/null || git checkout -b "$BRANCH" "origin/${BRANCH}"
@@ -191,9 +233,7 @@ if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
   _admin_agent_venv "admin_agent"
 fi
-# var/ a menudo mezcla dueños: php-fpm escribe caché como www-data; cache:clear necesita poder borrar/crear dentro de var/cache.
-# No uses un "probe" con sudo find: en algunas VM falla y el ramal sin sudo deja prod/ no escribible (Doctrine Proxies).
-# Basta NOPASSWD para chown (99-prevencion-deploy): chown -R var luego rm -rf var/cache sin sudo.
+# var/cache bajo www-data: chown -R var (sudo con rutas absolutas a chown) y luego borrar caché.
 U_PRE="$(id -u -n)"
 G_PRE="$(id -g -n)"
 _prep_var_before_cache_clear() {
@@ -201,13 +241,13 @@ _prep_var_before_cache_clear() {
   for _app in "$TOP/current" "$TOP/portal"; do
     [ -d "$_app" ] || continue
     mkdir -p "$_app/var" 2>/dev/null || true
-    if sudo -n chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null; then
+    if _deploy_sudo_chown_r "$_app/var" "$U_PRE:$G_PRE"; then
       rm -rf "$_app/var/cache"
       mkdir -p "$_app/var/cache"
     else
-      echo "Aviso: sudo -n chown -R $U_PRE:$G_PRE $_app/var falló (¿sin NOPASSWD chown? ver CICD-SETUP / 99-prevencion-deploy)." >&2
+      echo "Aviso: sudo chown $_app/var falló; comprueba /etc/sudoers.d (chown) o: sudo usermod -aG $WEB_USER $U_PRE + nueva sesión SSH." >&2
       if ! chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null; then
-        echo "Aviso: chown sin sudo también falló (mezcla www-data). cache:clear puede fallar; usermod -aG www-data $U_PRE o sudo chown -R en la VM." >&2
+        echo "Aviso: chown sin sudo falló (mezcla www-data)." >&2
       fi
       rm -rf "$_app/var/cache" 2>/dev/null || true
       mkdir -p "$_app/var/cache"
@@ -220,14 +260,13 @@ _prep_var_before_cache_clear
 # --no-warmup: rápido en deploy; el primer request calienta. Si prefieres cache listo: añade cache:warmup.
 for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
   [ -f "$_symf/bin/console" ] || continue
-  if ! (cd "$_symf" && php bin/console cache:clear --env=prod --no-warmup); then
-    echo "ERROR: cache:clear falló en $_symf. Prueba: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
+  if ! _console_cache_clear_prod "$_symf"; then
+    echo "ERROR: cache:clear falló en $_symf. Opciones: (1) NOPASSWD /usr/bin/chown en sudoers (CICD-SETUP), (2) sudo usermod -aG $WEB_USER $(id -u -n) y nueva sesión SSH para que funcione el reintento con sg, (3) una vez: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
     exit 1
   fi
 done
 # Inmediatamente tras cache:clear, var/ suele quedar u:ug sin grupo www-data → Apache no escribe
 # (RuntimeException: Unable to write in var/cache/prod). Re-aplicar var/ antes del chown total.
-WEB_USER="${DEPLOY_WEB_USER:-www-data}"
 U="$(id -u -n)"
 # chown U:www-data: "chown -R" falla si bajo el árbol hay aunque sea un inode de otro dueño
 # (root, www-data, copias viejos). Sólo ajustar lo de $U; luego intentar -R y sudo -n.

@@ -35,7 +35,7 @@ En la VM: remoto `git@github.com:…` (SSH a GitHub) y, si aplica, `sudo` para e
 
 `sudo install -m 440 -o root -g root /ruta/al/repo/.github/sudoers/99-prevencion-deploy /etc/sudoers.d/99-prevencion-deploy`
 
-Edítalo antes si el usuario de deploy no se llama `administrador`. Valida con `sudo visudo -c -f /etc/sudoers.d/99-prevencion-deploy`. Prueba: `sudo -n chown -h` (no debe pedir clave). Si un binario falla, `type chown chmod find chgrp systemctl` y añade la ruta que use tu sistema. Mientras no esté esto, el job termina en rojo y el sitio puede dar 500 sin el `chown` manual.
+Edítalo antes si el usuario de deploy no se llama `administrador`. Valida con `sudo visudo -c -f /etc/sudoers.d/99-prevencion-deploy`. Prueba desde SSH (no uses `chown -h` como test; puede no coincidir con la regla): `sudo -n /usr/bin/chown $(id -u -n):$(id -g -n) /ruta/al/repo/current/var` o `sudo -n -l`. Si pide contraseña o “not allowed”, la regla no aplica (usuario distinto, `requiretty`, o ruta de `chown` distinta: `type -a chown`). Mientras no esté esto, el job puede terminar en rojo en `cache:clear` o el sitio dar 500 sin el `chown` manual. **Alternativa sin NOPASSWD:** `sudo usermod -aG www-data administrador` y **nueva sesión SSH** (el deploy reintenta `cache:clear` con `sg www-data`).
 
 **Falta `public/build/manifest.json` (Webpack):** el build debe ejecutarse en el **mismo** directorio que el docroot; si Nginx/Apache apunta a `.../current/public` y en el clone solo hay `portal/`, deja alineado con `cd /ruta/prevencio && ln -sfn portal current`. El script ahora hace `npm run build` en `current/` (primero) y en `portal/`, sin duplicar la misma ruta real. Si aún no hay manifiesto, en la VM: `(cd ruta-symfony && npm ci && npm run build)`.
 
