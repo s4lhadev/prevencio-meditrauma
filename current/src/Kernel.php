@@ -30,6 +30,20 @@ class Kernel extends BaseKernel
         return \dirname(__DIR__);
     }
 
+    /**
+     * Permite APP_CACHE_DIR en .env cuando var/cache está mezclado con www-data y no hay sudo NOPASSWD.
+     * El deploy escribe APP_CACHE_DIR apuntando a project/.symfony-cache (ver remote-deploy.sh).
+     */
+    public function getCacheDir(): string
+    {
+        $override = $_SERVER['APP_CACHE_DIR'] ?? $_ENV['APP_CACHE_DIR'] ?? getenv('APP_CACHE_DIR');
+        if (\is_string($override) && '' !== $override) {
+            return rtrim($override, '/\\').'/'.$this->environment;
+        }
+
+        return $this->getProjectDir().'/var/cache/'.$this->environment;
+    }
+
     protected function configureContainer(ContainerBuilder $container, LoaderInterface $loader): void
     {
         $container->addResource(new FileResource($this->getProjectDir().'/config/bundles.php'));

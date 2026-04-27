@@ -60,3 +60,6 @@ portal/admin_agent/.codebase_index.sqlite
 **/var/cache/**
 **/var/log/**
 **/var/sessions/**
+
+# Caché del kernel fuera de var/ (APP_CACHE_DIR → deploy sin sudo NOPASSWD en var/cache)
+**/.symfony-cache/

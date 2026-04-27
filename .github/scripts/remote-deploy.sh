@@ -67,6 +67,36 @@ _sudo_repair_dir_group_writable() {
   sudo -n chgrp -R "$WEB_USER" "$root" 2>/dev/null
 }
 
+# Caché del kernel en .symfony-cache/ + APP_CACHE_DIR en .env (cache:clear sin tocar var/cache de www-data).
+_symfony_external_cache_setup() {
+  local app="$1"
+  [ -d "$app" ] || return 0
+  [ -f "$app/bin/console" ] || return 0
+  local xcd="${app}/.symfony-cache"
+  mkdir -p "$xcd"
+  chmod 2775 "$xcd" 2>/dev/null || chmod 775 "$xcd" || true
+  if ! chgrp "$WEB_USER" "$xcd" 2>/dev/null; then
+    echo "Aviso: chgrp $WEB_USER $xcd falló; chmod 2777 solo en .symfony-cache para Apache, o: sudo usermod -aG $WEB_USER $(id -u -n)" >&2
+    chmod 2777 "$xcd" 2>/dev/null || true
+  fi
+  local envf="${app}/.env"
+  if [ ! -f "$envf" ]; then
+    if [ -f "${envf}.dist" ]; then
+      cp -a "${envf}.dist" "$envf"
+    else
+      echo "Aviso: no hay $envf ni .env.dist; omito APP_CACHE_DIR en $(basename "$app")." >&2
+      return 0
+    fi
+  fi
+  local abs
+  abs="$(cd "$xcd" && pwd -P)"
+  if grep -q '^[[:space:]]*APP_CACHE_DIR=' "$envf" 2>/dev/null; then
+    grep -v '^[[:space:]]*APP_CACHE_DIR=' "$envf" > "${envf}.new.pcache" && mv "${envf}.new.pcache" "$envf"
+  fi
+  printf 'APP_CACHE_DIR=%s\n' "$abs" >> "$envf"
+  echo "APP_CACHE_DIR=$abs ($(basename "$app"))" >&2
+}
+
 _console_cache_clear_prod() {
   local d="$1"
   (cd "$d" && php bin/console cache:clear --env=prod --no-warmup) && return 0
@@ -137,6 +167,11 @@ git reset --hard "origin/${BRANCH}"
 if [ -f "$TOP/.github/scripts/infisical-admin-agent-env.sh" ]; then
   bash "$TOP/.github/scripts/infisical-admin-agent-env.sh" "$TOP" || exit 1
 fi
+# Sin sudo NOPASSWD, var/cache no se puede vaciar; el kernel usa APP_CACHE_DIR → .symfony-cache/ (ver src/Kernel.php).
+for _extc in "$TOP/current" "$TOP/portal"; do
+  [ -f "$_extc/bin/console" ] || continue
+  _symfony_external_cache_setup "$_extc"
+done
 # No ejecutar "composer dump-env prod" en deploy: en varios entornos rompe .env / .env.local.php y deja HTTP 500.
 # Si usas .env.local.php, tras un deploy con secretos nuevos ejecuta a mano en la VM, en portal/ y current/:
 #   composer dump-env prod
