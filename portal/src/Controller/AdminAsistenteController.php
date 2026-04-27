@@ -7,6 +7,7 @@ use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Psr\Log\LoggerInterface;
 
 /**
  * Asistente IA bajo /agent — proxy a admin_agent/ (local). Rutas en config/routes.yaml.
@@ -20,15 +21,28 @@ class AdminAsistenteController extends AbstractController
 
     private const UNLOCK_COOKIE_LIFETIME = 18000;
 
+    /** @var LoggerInterface */
+    private $logger;
+
+    public function __construct(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
+
     public function index(Request $request): Response
     {
         $pageKey = trim((string) $this->getParameter('admin_agent.page_key'));
         if ($pageKey === '') {
+            $this->logger->info('admin_asistente.index: page key empty (ADMIN_AGENT_PAGE_KEY not set)');
+
             return $this->render('admin_asistente/page_not_configured.html.twig');
         }
         if (!$this->isAgentPageUnlocked($request)) {
+            $this->logger->info('admin_asistente.index: not unlocked, showing form', $this->unlockDebugContext($request, $pageKey));
+
             return $this->render('admin_asistente/unlock.html.twig');
         }
+        $this->logger->debug('admin_asistente.index: unlocked, rendering assistant', $this->unlockDebugContext($request, $pageKey));
 
         $base = (string) $this->getParameter('admin_agent.internal_url');
         $secret = (string) $this->getParameter('admin_agent.secret');
@@ -46,21 +60,38 @@ class AdminAsistenteController extends AbstractController
     public function unlock(Request $request): Response
     {
         if (!$request->isMethod('POST')) {
+            $this->logger->warning('admin_asistente.unlock: not POST, redirecting');
+
             return $this->redirectToRoute('admin_asistente');
         }
         $pageKey = trim((string) $this->getParameter('admin_agent.page_key'));
         if ($pageKey === '') {
+            $this->logger->warning('admin_asistente.unlock: page key not configured');
             $this->addFlash('error', 'Falta ADMIN_AGENT_PAGE_KEY en .env.');
 
             return $this->redirectToRoute('admin_asistente');
         }
-        if (!$this->isCsrfTokenValid('admin_asistente_unlock', (string) $request->request->get('_csrf_token'))) {
+        $csrfToken = (string) $request->request->get('_csrf_token', '');
+        $csrfOk = $this->isCsrfTokenValid('admin_asistente_unlock', $csrfToken);
+        if (!$csrfOk) {
+            $this->logger->warning('admin_asistente.unlock: CSRF failed', array_merge(
+                $this->unlockDebugContext($request, $pageKey),
+                array('csrf_token_len' => strlen($csrfToken))
+            ));
             $this->addFlash('error', 'Sesión de seguridad inválida. Prueba otra vez.');
 
             return $this->redirectToRoute('admin_asistente');
         }
         $submitted = trim((string) $request->request->get('key', ''));
-        if (strlen($pageKey) !== strlen($submitted) || !hash_equals($pageKey, $submitted)) {
+        $keyLen = strlen($pageKey);
+        $subLen = strlen($submitted);
+        $lenMatch = $keyLen === $subLen;
+        $hashMatch = $lenMatch && hash_equals($pageKey, $submitted);
+        if (!$hashMatch) {
+            $this->logger->info('admin_asistente.unlock: key mismatch (lengths or hash)', array_merge(
+                $this->unlockDebugContext($request, $pageKey),
+                array('key_len' => $keyLen, 'submitted_len' => $subLen, 'length_match' => $lenMatch)
+            ));
             $this->addFlash('error', 'Clave incorrecta.');
 
             return $this->redirectToRoute('admin_asistente');
@@ -68,6 +99,8 @@ class AdminAsistenteController extends AbstractController
         $session = $request->getSession();
         $session->set(self::SESSION_PAGE_UNLOCK, true);
         $session->save();
+
+        $this->logger->info('admin_asistente.unlock: success, session+redirect+cookie', $this->unlockDebugContext($request, $pageKey));
 
         $this->addFlash('success', 'Acceso al asistente activado.');
 
@@ -212,17 +245,44 @@ class AdminAsistenteController extends AbstractController
         }
 
         if ((bool) $request->getSession()->get(self::SESSION_PAGE_UNLOCK)) {
+            $this->logger->debug('admin_asistente.isUnlocked: true via session', $this->unlockDebugContext($request, $pageKey));
+
             return true;
         }
 
         $expected = $this->unlockCookieHmac($pageKey);
         $fromCookie = (string) $request->cookies->get(self::UNLOCK_COOKIE, '');
         if ($fromCookie === '' || !hash_equals($expected, $fromCookie)) {
+            $hmacEqual = $fromCookie !== '' && hash_equals($expected, $fromCookie);
+            $this->logger->notice('admin_asistente.isUnlocked: false (no session, cookie bad/missing)', array_merge(
+                $this->unlockDebugContext($request, $pageKey),
+                array('cookie_len' => strlen($fromCookie), 'hmac_match' => $hmacEqual)
+            ));
+
             return false;
         }
+        $this->logger->info('admin_asistente.isUnlocked: true via cookie, syncing session', $this->unlockDebugContext($request, $pageKey));
         $request->getSession()->set(self::SESSION_PAGE_UNLOCK, true);
 
         return true;
+    }
+
+    private function unlockDebugContext(Request $request, string $pageKey): array
+    {
+        $session = $request->getSession();
+        $sid = method_exists($session, 'getId') ? (string) $session->getId() : '';
+        if (strlen($sid) > 8) {
+            $sid = substr($sid, 0, 4).'…'.substr($sid, -4);
+        }
+
+        return array(
+            'request_is_secure' => $request->isSecure(),
+            'session_id' => $sid,
+            'session_flag' => (bool) $request->getSession()->get(self::SESSION_PAGE_UNLOCK),
+            'cookie_present' => $request->cookies->has(self::UNLOCK_COOKIE),
+            'page_key_configured' => $pageKey !== '',
+            'page_key_len' => strlen($pageKey),
+        );
     }
 
     private function unlockCookieHmac(string $pageKey): string
