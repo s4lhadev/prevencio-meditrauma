@@ -1,0 +1,4 @@
+framework:
+    session:
+        # HTTPS en navegador aunque PHP vea HTTP (terminación TLS en Apache/proxy)
+        cookie_secure: true

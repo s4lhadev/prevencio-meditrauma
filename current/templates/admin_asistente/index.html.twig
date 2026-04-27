@@ -38,6 +38,9 @@
     <h1>Asistente (Prevención)</h1>
     <p class="sub">Uso interno. Tráfico al servicio <code>admin_agent</code> (puerto 9102) y a OpenRouter.</p>
 
+    {% if agent_unlock_notice is defined and agent_unlock_notice %}
+        <div class="banner" style="background: rgba(43,182,115,0.12); border-color: rgba(43,182,115,0.45); color: #7ee2b8;">{{ agent_unlock_notice }}</div>
+    {% endif %}
     {% for message in app.flashes('success') %}
         <div class="banner" style="background: rgba(43,182,115,0.12); border-color: rgba(43,182,115,0.45); color: #7ee2b8;">{{ message }}</div>
     {% endfor %}
@@ -157,5 +160,13 @@
     });
 })();
 </script>
+{% if agent_replace_history is defined and agent_replace_history %}
+<script>
+(function () {
+    var u = {{ path('admin_asistente')|json_encode|raw }};
+    try { history.replaceState(null, '', u); } catch (e) {}
+})();
+</script>
+{% endif %}
 </body>
 </html>

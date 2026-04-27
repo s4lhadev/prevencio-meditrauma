@@ -108,11 +108,17 @@ class AdminAsistenteController extends AbstractController
         $session->set(self::SESSION_PAGE_UNLOCK, true);
         $session->save();
 
-        $this->logAdmin('info', 'admin_asistente.unlock: success, session+redirect+cookie', $this->unlockDebugContext($request, $pageKey));
+        $this->logAdmin('info', 'admin_asistente.unlock: success, render assistant (200+Set-Cookie+replaceState)', $this->unlockDebugContext($request, $pageKey));
 
-        $this->addFlash('success', 'Acceso al asistente activado.');
+        $base = (string) $this->getParameter('admin_agent.internal_url');
+        $secret = (string) $this->getParameter('admin_agent.secret');
+        $configured = !($base === '' || $secret === '' || $secret === 'change_me_match_admin_agent_env');
 
-        $response = $this->redirectToRoute('admin_asistente');
+        $response = $this->render('admin_asistente/index.html.twig', array(
+            'assistant_configured' => $configured,
+            'agent_replace_history' => true,
+            'agent_unlock_notice' => 'Acceso al asistente activado.',
+        ));
         $this->addUnlockCookie($response, $request, $pageKey);
 
         return $response;
@@ -285,12 +291,35 @@ class AdminAsistenteController extends AbstractController
 
         return array(
             'request_is_secure' => $request->isSecure(),
+            'client_uses_tls' => $this->clientUsesTls($request),
             'session_id' => $sid,
             'session_flag' => (bool) $request->getSession()->get(self::SESSION_PAGE_UNLOCK),
             'cookie_present' => $request->cookies->has(self::UNLOCK_COOKIE),
             'page_key_configured' => $pageKey !== '',
             'page_key_len' => strlen($pageKey),
         );
+    }
+
+    private function clientUsesTls(Request $request): bool
+    {
+        if ($request->isSecure()) {
+            return true;
+        }
+        $https = isset($_SERVER['HTTPS']) ? (string) $_SERVER['HTTPS'] : '';
+        if ($https !== '' && 'off' !== strtolower($https)) {
+            return true;
+        }
+        $xfProto = isset($_SERVER['HTTP_X_FORWARDED_PROTO']) ? strtolower((string) $_SERVER['HTTP_X_FORWARDED_PROTO']) : '';
+        if ('https' === $xfProto) {
+            return true;
+        }
+        $xfSsl = isset($_SERVER['HTTP_X_FORWARDED_SSL']) ? strtolower((string) $_SERVER['HTTP_X_FORWARDED_SSL']) : '';
+        if ('on' === $xfSsl) {
+            return true;
+        }
+        $port = isset($_SERVER['SERVER_PORT']) ? (string) $_SERVER['SERVER_PORT'] : '';
+
+        return '443' === $port;
     }
 
     private function unlockCookieHmac(string $pageKey): string
@@ -303,13 +332,14 @@ class AdminAsistenteController extends AbstractController
     private function addUnlockCookie(Response $response, Request $request, string $pageKey): void
     {
         $value = $this->unlockCookieHmac($pageKey);
+        $secureFlag = $this->clientUsesTls($request);
         $response->headers->setCookie(new Cookie(
             self::UNLOCK_COOKIE,
             $value,
             time() + self::UNLOCK_COOKIE_LIFETIME,
             '/',
             null,
-            $request->isSecure(),
+            $secureFlag,
             true,
             false,
             Cookie::SAMESITE_LAX
@@ -318,13 +348,14 @@ class AdminAsistenteController extends AbstractController
 
     private function clearUnlockCookie(Response $response, Request $request): void
     {
+        $secureFlag = $this->clientUsesTls($request);
         $response->headers->setCookie(new Cookie(
             self::UNLOCK_COOKIE,
             '',
             1,
             '/',
             null,
-            $request->isSecure(),
+            $secureFlag,
             true,
             false,
             Cookie::SAMESITE_LAX
