@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,6 +15,10 @@ use Symfony\Component\HttpFoundation\Response;
 class AdminAsistenteController extends AbstractController
 {
     const SESSION_PAGE_UNLOCK = 'admin_asistente_page_unlocked';
+
+    private const UNLOCK_COOKIE = 'admin_asistente_u';
+
+    private const UNLOCK_COOKIE_LIFETIME = 18000;
 
     public function index(Request $request): Response
     {
@@ -55,7 +60,7 @@ class AdminAsistenteController extends AbstractController
             return $this->redirectToRoute('admin_asistente');
         }
         $submitted = trim((string) $request->request->get('key', ''));
-        if (!hash_equals($pageKey, $submitted)) {
+        if (strlen($pageKey) !== strlen($submitted) || !hash_equals($pageKey, $submitted)) {
             $this->addFlash('error', 'Clave incorrecta.');
 
             return $this->redirectToRoute('admin_asistente');
@@ -66,14 +71,19 @@ class AdminAsistenteController extends AbstractController
 
         $this->addFlash('success', 'Acceso al asistente activado.');
 
-        return $this->redirectToRoute('admin_asistente');
+        $response = $this->redirectToRoute('admin_asistente');
+        $this->addUnlockCookie($response, $request, $pageKey);
+
+        return $response;
     }
 
     public function logout(Request $request): Response
     {
         $request->getSession()->remove(self::SESSION_PAGE_UNLOCK);
+        $response = $this->redirectToRoute('admin_asistente');
+        $this->clearUnlockCookie($response, $request);
 
-        return $this->redirectToRoute('admin_asistente');
+        return $response;
     }
 
     public function chat(Request $request): JsonResponse
@@ -201,6 +211,55 @@ class AdminAsistenteController extends AbstractController
             return false;
         }
 
-        return (bool) $request->getSession()->get(self::SESSION_PAGE_UNLOCK);
+        if ((bool) $request->getSession()->get(self::SESSION_PAGE_UNLOCK)) {
+            return true;
+        }
+
+        $expected = $this->unlockCookieHmac($pageKey);
+        $fromCookie = (string) $request->cookies->get(self::UNLOCK_COOKIE, '');
+        if ($fromCookie === '' || !hash_equals($expected, $fromCookie)) {
+            return false;
+        }
+        $request->getSession()->set(self::SESSION_PAGE_UNLOCK, true);
+
+        return true;
+    }
+
+    private function unlockCookieHmac(string $pageKey): string
+    {
+        $kernelSecret = (string) $this->getParameter('kernel.secret');
+
+        return hash_hmac('sha256', 'admin_asistente_unlock_v1'."\n".$pageKey, $kernelSecret);
+    }
+
+    private function addUnlockCookie(Response $response, Request $request, string $pageKey): void
+    {
+        $value = $this->unlockCookieHmac($pageKey);
+        $response->headers->setCookie(new Cookie(
+            self::UNLOCK_COOKIE,
+            $value,
+            time() + self::UNLOCK_COOKIE_LIFETIME,
+            '/',
+            null,
+            $request->isSecure(),
+            true,
+            false,
+            Cookie::SAMESITE_LAX
+        ));
+    }
+
+    private function clearUnlockCookie(Response $response, Request $request): void
+    {
+        $response->headers->setCookie(new Cookie(
+            self::UNLOCK_COOKIE,
+            '',
+            1,
+            '/',
+            null,
+            $request->isSecure(),
+            true,
+            false,
+            Cookie::SAMESITE_LAX
+        ));
     }
 }
