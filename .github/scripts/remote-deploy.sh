@@ -47,12 +47,36 @@ _deploy_sudo_chown_r() {
   return 1
 }
 
+# Cuando NOPASSWD para chown no está (o falla), a veces sí lo están find+chmod+chgrp. Dirs 755 www-data impiden
+# unlink aunque uses sg www-data (uid sigue siendo deploy); 2775 + grupo WEB_USER + deploy∈WEB_USER sí.
+_sudo_repair_dir_group_writable() {
+  local root="$1"
+  [ -d "$root" ] || return 0
+  command -v sudo >/dev/null 2>&1 || return 1
+  if ! sudo -n find "$root" -xdev -type d -exec chmod 2775 {} + 2>/dev/null; then
+    return 1
+  fi
+  sudo -n find "$root" -xdev -type f -exec chmod 664 {} + 2>/dev/null || true
+  local _cg
+  for _cg in /usr/bin/chgrp /bin/chgrp; do
+    [ -x "$_cg" ] || continue
+    if sudo -n "$_cg" -R "$WEB_USER" "$root" 2>/dev/null; then
+      return 0
+    fi
+  done
+  sudo -n chgrp -R "$WEB_USER" "$root" 2>/dev/null
+}
+
 _console_cache_clear_prod() {
   local d="$1"
   (cd "$d" && php bin/console cache:clear --env=prod --no-warmup) && return 0
+  if [ -d "$d/var/cache" ]; then
+    _sudo_repair_dir_group_writable "$d/var/cache" 2>/dev/null || true
+    (cd "$d" && php bin/console cache:clear --env=prod --no-warmup) && return 0
+  fi
   if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx "$WEB_USER"; then
     if command -v sg >/dev/null 2>&1; then
-      echo "Aviso: cache:clear en $d falló como $(id -u -n); reintento con sg $WEB_USER (ver CICD-SETUP: usermod -aG $WEB_USER)." >&2
+      echo "Aviso: cache:clear en $d falló como $(id -u -n); reintento con sg $WEB_USER (dirs 755: usar find+chmod; CICD-SETUP)." >&2
       (cd "$d" && sg "$WEB_USER" -c "php bin/console cache:clear --env=prod --no-warmup") && return 0
     fi
   fi
@@ -245,11 +269,18 @@ _prep_var_before_cache_clear() {
       rm -rf "$_app/var/cache"
       mkdir -p "$_app/var/cache"
     else
-      echo "Aviso: sudo chown $_app/var falló; comprueba /etc/sudoers.d (chown) o: sudo usermod -aG $WEB_USER $U_PRE + nueva sesión SSH." >&2
+      echo "Aviso: sudo chown $_app/var falló; reparando permisos con sudo find+chmod+chgrp (mismo 99-prevencion-deploy que chown)…" >&2
+      if [ -d "$_app/var/cache" ]; then
+        _sudo_repair_dir_group_writable "$_app/var/cache" || echo "Aviso: sudo chmod/chgrp en $_app/var/cache falló (sin NOPASSWD)." >&2
+      fi
       if ! chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null; then
         echo "Aviso: chown sin sudo falló (mezcla www-data)." >&2
       fi
-      rm -rf "$_app/var/cache" 2>/dev/null || true
+      rm -rf "$_app/var/cache" 2>/dev/null || {
+        echo "Aviso: rm -rf caché falló; reparando todo $_app/var…" >&2
+        _sudo_repair_dir_group_writable "$_app/var" || true
+        rm -rf "$_app/var/cache" 2>/dev/null || true
+      }
       mkdir -p "$_app/var/cache"
     fi
   done
@@ -261,7 +292,7 @@ _prep_var_before_cache_clear
 for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
   [ -f "$_symf/bin/console" ] || continue
   if ! _console_cache_clear_prod "$_symf"; then
-    echo "ERROR: cache:clear falló en $_symf. Opciones: (1) NOPASSWD /usr/bin/chown en sudoers (CICD-SETUP), (2) sudo usermod -aG $WEB_USER $(id -u -n) y nueva sesión SSH para que funcione el reintento con sg, (3) una vez: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
+    echo "ERROR: cache:clear falló en $_symf. Opciones: (1) NOPASSWD: chown o, como mínimo, find+chmod+chgrp (99-prevencion-deploy), (2) usermod -aG $WEB_USER $(id -u -n) + sesión SSH nueva, (3) una vez: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
     exit 1
   fi
 done
