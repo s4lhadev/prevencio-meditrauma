@@ -86,9 +86,13 @@ def _require_secret(x_admin_agent_secret: Optional[str]) -> None:
 
 @app.get("/health")
 def health() -> Dict[str, str]:
+    import hashlib
+    s = (os.getenv("ADMIN_AGENT_SECRET") or "").strip()
+    fp = "empty" if not s else f"len={len(s)} sha256_8={hashlib.sha256(s.encode()).hexdigest()[:8]}"
     return {
         "status": "ok",
         "product": (os.getenv("APP_PRODUCT") or "prevencion").strip() or "prevencion",
+        "secret_fingerprint": fp,
     }
 
 

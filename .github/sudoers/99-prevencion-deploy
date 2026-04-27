@@ -13,4 +13,4 @@
 Defaults:administrador !requiretty
 Defaults:administrador !lecture
 
-administrador ALL=(ALL) NOPASSWD: /usr/bin/chown, /bin/chown, /usr/bin/chmod, /bin/chmod, /usr/bin/chgrp, /bin/chgrp, /usr/bin/find, /bin/find, /usr/bin/systemctl, /bin/systemctl
+administrador ALL=(ALL) NOPASSWD: /usr/bin/chown, /bin/chown, /usr/bin/chmod, /bin/chmod, /usr/bin/chgrp, /bin/chgrp, /usr/bin/find, /bin/find, /usr/bin/systemctl, /bin/systemctl, /usr/bin/install, /bin/install

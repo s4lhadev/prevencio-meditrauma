@@ -389,9 +389,54 @@ if getent group "$WEB_USER" >/dev/null 2>&1; then
     _chmod_ug_dir "$_app/var"
   done
 fi
-if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
-  sudo -n systemctl restart prevencion-admin-agent 2>/dev/null || true
-fi
+_admin_agent_unit_install_and_restart() {
+  # Instala/actualiza la unit si tenemos sudo NOPASSWD; siempre intenta restart.
+  # Sin systemd o sin sudo: fallback que mata uvicorn huerfano y lo arranca con .venv del repo.
+  local unit_src="$TOP/.github/systemd/prevencion-admin-agent.service"
+  local unit_dst="/etc/systemd/system/prevencion-admin-agent.service"
+  local agent_dir="$TOP/portal/admin_agent"
+  [ -d "$agent_dir" ] || agent_dir="$TOP/admin_agent"
+  [ -d "$agent_dir" ] || return 0
+  if command -v systemctl >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1 && [ -f "$unit_src" ]; then
+    local rendered
+    rendered="$(mktemp)"
+    sed "s#/home/administrador/prevencio/prevencio-meditrauma/portal/admin_agent#${agent_dir}#g; s#^User=.*#User=${U_PRE}#; s#^Group=.*#Group=${WEB_USER}#" "$unit_src" > "$rendered"
+    if [ ! -f "$unit_dst" ] || ! cmp -s "$rendered" "$unit_dst"; then
+      if sudo -n install -m 0644 -o root -g root "$rendered" "$unit_dst" 2>/dev/null; then
+        sudo -n systemctl daemon-reload 2>/dev/null || true
+        sudo -n systemctl enable prevencion-admin-agent 2>/dev/null || true
+        echo "OK: unit prevencion-admin-agent instalada/actualizada en $unit_dst" >&2
+      else
+        echo "Aviso: sudo install de la unit fallo (NOPASSWD?); seguire con fallback manual." >&2
+      fi
+    fi
+    rm -f "$rendered"
+    if sudo -n systemctl restart prevencion-admin-agent 2>/dev/null; then
+      echo "OK: prevencion-admin-agent reiniciado (recarga .env)." >&2
+      return 0
+    fi
+  fi
+  # Fallback sin systemd: mata uvicorn huerfano del agente y lo relanza desde el repo.
+  if command -v pgrep >/dev/null 2>&1; then
+    local pids
+    pids="$(pgrep -f "${agent_dir}/.venv/bin/python.*uvicorn.*app:app" 2>/dev/null || true)"
+    [ -z "$pids" ] && pids="$(pgrep -f 'uvicorn.*app:app.*9102' 2>/dev/null || true)"
+    if [ -n "$pids" ]; then
+      echo "Matando uvicorn huerfano (PIDs: $pids) para recargar .env." >&2
+      kill $pids 2>/dev/null || true
+      sleep 1
+      kill -9 $pids 2>/dev/null || true
+    fi
+  fi
+  if [ -x "${agent_dir}/.venv/bin/python" ]; then
+    ( cd "$agent_dir" && nohup .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 9102 \
+        > /tmp/prevencion-admin-agent.log 2>&1 & disown ) || true
+    echo "Aviso: uvicorn relanzado a mano (sin systemd). Considera dar NOPASSWD a systemctl para usar la unit." >&2
+  else
+    echo "Aviso: no hay $agent_dir/.venv/bin/python; uvicorn no se ha (re)arrancado." >&2
+  fi
+}
+_admin_agent_unit_install_and_restart
 # Apache (www-data) y el usuario de deploy: mismo grupo en todo current/ y portal/
 #  - NUNCA dejar var/ solo como www-data:www-data: el deploy no podrá cache:clear (portal lo mostró)
 #  - Dirs 2775 (setgid) + files 664: _chown_ug sin sudo si $U∈$WEB_USER; si no, NOPASSWD o chown a mano

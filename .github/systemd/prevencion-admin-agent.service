@@ -1,0 +1,20 @@
+[Unit]
+Description=MDT Prevencion admin assistant (uvicorn 127.0.0.1:9102)
+After=network.target
+
+[Service]
+Type=simple
+User=administrador
+Group=www-data
+WorkingDirectory=/home/administrador/prevencio/prevencio-meditrauma/portal/admin_agent
+# El ExecStart confia en .venv del WorkingDirectory; si recreas el venv, no hace falta tocar la unit.
+ExecStart=/home/administrador/prevencio/prevencio-meditrauma/portal/admin_agent/.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 9102
+Restart=on-failure
+RestartSec=3
+# app.py hace load_dotenv(.env, override=True), por lo que .env del WorkingDirectory siempre gana.
+# No definimos Environment= para no enmascarar el .env desplegado.
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
