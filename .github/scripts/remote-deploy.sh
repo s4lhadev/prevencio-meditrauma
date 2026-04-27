@@ -191,15 +191,33 @@ if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
   _admin_agent_venv "admin_agent"
 fi
-# var/ a veces queda con dueño www-data (deploy anterior); hace falta vuelve a u:g primario
-# para cache:clear. Sin sudo: chown a tu uid solo si eres el dueño; con sudo: cualquier mezcla.
+# var/ a menudo mezcla dueños: php-fpm escribe caché como www-data; cache:clear como usuario de deploy no puede hacer unlink.
+# Siempre intentar sudo -n (NOPASSWD en CICD-SETUP): chown del árbol y borrar var/cache antes de bin/console.
 U_PRE="$(id -u -n)"
 G_PRE="$(id -g -n)"
-if mkdir -p "$TOP/current/var" "$TOP/portal/var" 2>/dev/null; then
-  if ! chown -R "$U_PRE:$G_PRE" "$TOP/current/var" "$TOP/portal/var" 2>/dev/null; then
-    command -v sudo >/dev/null 2>&1 && sudo -n chown -R "$U_PRE:$G_PRE" "$TOP/current/var" "$TOP/portal/var" 2>/dev/null || true
-  fi
-fi
+_prep_var_before_cache_clear() {
+  local _app
+  for _app in "$TOP/current" "$TOP/portal"; do
+    [ -d "$_app" ] || continue
+    mkdir -p "$_app/var" 2>/dev/null || true
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      sudo -n chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null || true
+      if [ -d "$_app/var/cache" ]; then
+        sudo -n find "$_app/var/cache" -mindepth 1 -delete 2>/dev/null || true
+      fi
+      mkdir -p "$_app/var/cache"
+      sudo -n chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null || true
+    else
+      if ! chown -R "$U_PRE:$G_PRE" "$_app/var" 2>/dev/null; then
+        echo "ERROR: chown de $_app/var falló y sudo -n no está disponible. Añade NOPASSWD (ver .github/CICD-SETUP.md)." >&2
+        exit 1
+      fi
+      rm -rf "$_app/var/cache" 2>/dev/null || true
+      mkdir -p "$_app/var/cache"
+    fi
+  done
+}
+_prep_var_before_cache_clear
 # Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony
 # (también vía CI: GitHub Actions ejecuta este script en la VM; no hace falta cache:clear a mano.)
 # --no-warmup: rápido en deploy; el primer request calienta. Si prefieres cache listo: añade cache:warmup.

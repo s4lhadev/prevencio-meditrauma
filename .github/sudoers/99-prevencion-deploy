@@ -7,6 +7,9 @@
 # Si un comando "no está permitido", en la VM: type chown chmod find chgrp systemctl
 # (Debian: casi todo en /usr/bin; a veces /bin es enlace a /usr/bin)
 
+# remote-deploy.sh vacía var/cache antes de cache:clear con: sudo find VAR/cache -mindepth 1 -delete
+# (así no hace falta NOPASSWD para /bin/rm; www-data suele dejar twig/*.php no borrables sin sudo).
+
 Defaults:administrador !requiretty
 Defaults:administrador !lecture
 
