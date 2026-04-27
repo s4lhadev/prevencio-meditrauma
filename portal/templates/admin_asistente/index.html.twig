@@ -74,7 +74,7 @@
 </div>
 <script>
 (function () {
-    var token = {{ csrf_token('admin_asistente')|json_encode|raw }};
+    var token = {{ agent_ajax_token|json_encode|raw }};
     var log = document.getElementById('log');
     var input = document.getElementById('input');
     var send = document.getElementById('send');

@@ -76,6 +76,7 @@ class AdminAsistenteController extends AbstractController
 
         return $this->render('admin_asistente/index.html.twig', array(
             'assistant_configured' => $configured,
+            'agent_ajax_token' => $this->agentAjaxToken(),
         ));
     }
 
@@ -133,6 +134,7 @@ class AdminAsistenteController extends AbstractController
             'assistant_configured' => $configured,
             'agent_replace_history' => true,
             'agent_unlock_notice' => 'Acceso al asistente activado.',
+            'agent_ajax_token' => $this->agentAjaxToken(),
         ));
         $this->addUnlockCookie($response, $request, $pageKey);
         $this->clearUnlockCsrfCookie($response, $request);
@@ -159,7 +161,7 @@ class AdminAsistenteController extends AbstractController
         if (!is_array($data)) {
             return new JsonResponse(array('error' => 'invalid_json'), 400);
         }
-        if (!isset($data['_token']) || !$this->isCsrfTokenValid('admin_asistente', (string) $data['_token'])) {
+        if (!isset($data['_token']) || !$this->isValidAgentAjaxToken((string) $data['_token'])) {
             return new JsonResponse(array('error' => 'csrf'), 400);
         }
         $message = isset($data['message']) ? trim((string) $data['message']) : '';
@@ -238,7 +240,7 @@ class AdminAsistenteController extends AbstractController
             return new JsonResponse(array('error' => 'method'), 405);
         }
         $data = json_decode($request->getContent(), true);
-        if (!is_array($data) || !isset($data['_token']) || !$this->isCsrfTokenValid('admin_asistente', (string) $data['_token'])) {
+        if (!is_array($data) || !isset($data['_token']) || !$this->isValidAgentAjaxToken((string) $data['_token'])) {
             return new JsonResponse(array('error' => 'csrf'), 400);
         }
         $full = !empty($data['full']);
@@ -343,6 +345,21 @@ class AdminAsistenteController extends AbstractController
         $port = isset($_SERVER['SERVER_PORT']) ? (string) $_SERVER['SERVER_PORT'] : '';
 
         return '443' === $port;
+    }
+
+    /**
+     * Token JSON (chat / reindex) sin sesión: HMAC(APP_SECRET). Mitiga CSRF entre orígenes; no sustituye el desbloqueo /agent.
+     */
+    private function agentAjaxToken(): string
+    {
+        return hash_hmac('sha256', 'admin_asistente_ajax_v1', (string) $this->getParameter('kernel.secret'));
+    }
+
+    private function isValidAgentAjaxToken(string $token): bool
+    {
+        $expected = $this->agentAjaxToken();
+
+        return $token !== '' && hash_equals($expected, $token);
     }
 
     private function unlockCookieHmac(string $pageKey): string
