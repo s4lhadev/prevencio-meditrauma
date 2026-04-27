@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Genera admin_agent/.env con solo INFISICAL_TOKEN. Prueba slugs production / prod.
-# APP_PRODUCT_OVERRIDE: workflow (medisalut / prevencion). Sin token, sale 0.
+# Con INFISICAL_TOKEN: exporta secrets → admin_agent/.env y fusiona ADMIN_AGENT_* en Symfony (.env).
+# Sin token: conserva admin_agent/.env en disco y hace esa misma fusión (evita 401 si PHP ≠ Python).
+# APP_PRODUCT_OVERRIDE: workflow (medisalut / prevencion).
 # No exige sudo: npx, binario en ~/.local/bin, o apt si sudo -n.
 set -euo pipefail
 
@@ -21,22 +22,93 @@ _is_dotenv_value_empty() {
   return 1
 }
 
-if [ -z "${INFISICAL_TOKEN:-}" ]; then
-  echo "Aviso: INFISICAL_TOKEN no definido; se conserva admin_agent/.env local si existe."
-  exit 0
-fi
-
 AGENT_SUB=""
 if [ -f "$REPO_ROOT/portal/admin_agent/requirements.txt" ]; then
   AGENT_SUB="portal/admin_agent"
 elif [ -f "$REPO_ROOT/admin_agent/requirements.txt" ]; then
   AGENT_SUB="admin_agent"
 else
-  echo "Aviso: no hay admin_agent; omitiendo Infisical."
+  echo "Aviso: no hay admin_agent; omitiendo."
+  exit 0
+fi
+OUT="$REPO_ROOT/$AGENT_SUB/.env"
+
+_ensure_symfony_dotenv_bootstrap() {
+  local f d
+  for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
+    [ -f "$f" ] && continue
+    d="${f}.dist"
+    if [ -f "$d" ]; then
+      echo "Aviso: creando $f desde $(basename "$d") (no existía; hace falta .env base para fusionar)." >&2
+      cp -a "$d" "$f"
+    else
+      : > "$f"
+      echo "Aviso: creado $f vacío (falta .env.dist en $(dirname "$f") )." >&2
+    fi
+  done
+}
+
+_merge_symfony_dotenv_from_admin_agent() {
+  local agent_env k line v f
+  agent_env="$OUT"
+  [ -f "$agent_env" ] || return 0
+  for k in ADMIN_AGENT_INTERNAL_URL ADMIN_AGENT_SECRET ADMIN_AGENT_PAGE_KEY; do
+    line=$(grep -m1 "^[[:space:]]*${k}=" "$agent_env" 2>/dev/null || true)
+    [ -n "$line" ] || continue
+    v="${line#*=}"
+    if [ "$k" = "ADMIN_AGENT_PAGE_KEY" ] && _is_dotenv_value_empty "$v"; then
+      continue
+    fi
+    for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
+      [ -f "$f" ] || continue
+      if grep -q "^[[:space:]]*${k}=" "$f" 2>/dev/null; then
+        grep -v "^[[:space:]]*${k}=" "$f" > "${f}.new" 2>/dev/null || : > "${f}.new"
+        mv "${f}.new" "$f"
+      fi
+      printf '%s=%s\n' "$k" "$v" >> "$f"
+    done
+  done
+}
+
+_ensure_page_key_in_php_env_from_dist() {
+  local distline
+  distline=$(grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$REPO_ROOT/portal/.env.dist" 2>/dev/null || grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$REPO_ROOT/current/.env.dist" 2>/dev/null || true)
+  [ -n "$distline" ] || return 0
+  for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
+    [ -f "$f" ] || continue
+    val=""
+    if grep -qE '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null; then
+      val=$(grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null | cut -d= -f2-)
+    fi
+    if ! _is_dotenv_value_empty "$val"; then
+      continue
+    fi
+    if grep -qE '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null; then
+      grep -v '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" > "${f}.new" 2>/dev/null || : > "${f}.new"
+      mv "${f}.new" "$f"
+    fi
+    printf '%s\n' "$distline" >> "$f"
+    echo "Aviso: ADMIN_AGENT_PAGE_KEY rellenado desde .env.dist en $f (pon la clave real en Infisical si no está)" >&2
+  done
+}
+
+_sync_symfony_admin_keys_from_agent_env() {
+  _ensure_symfony_dotenv_bootstrap
+  _merge_symfony_dotenv_from_admin_agent
+  _ensure_page_key_in_php_env_from_dist
+}
+
+if [ -z "${INFISICAL_TOKEN:-}" ]; then
+  echo "Aviso: INFISICAL_TOKEN no definido; se usa admin_agent/.env en disco y se sincroniza ADMIN_AGENT_* → portal/current .env." >&2
+  if [ ! -f "$OUT" ]; then
+    echo "Aviso: no existe $OUT; nada que fusionar a Symfony." >&2
+    exit 0
+  fi
+  _sync_symfony_admin_keys_from_agent_env
+  echo "OK: $OUT → Symfony (.env); vuelve a desplegar o ejecuta cache:clear si no corre en CI." >&2
   exit 0
 fi
 
-OUT="$REPO_ROOT/$AGENT_SUB/.env"
 ENV_CANDIDATES="production prod"
 INFISICAL_CLI_VERSION="${INFISICAL_CLI_VERSION:-0.43.77}"
 NPX_PKG="${INFISICAL_NPX_PACKAGE:-@infisical/cli}"
@@ -136,68 +208,5 @@ if [ -n "${APP_PRODUCT_OVERRIDE:-}" ]; then
   echo "APP_PRODUCT=$APP_PRODUCT_OVERRIDE" >> "$OUT"
 fi
 
-# Si no hay .env de Symfony, el merge a continuación no hace nada; Infisical solo llena admin_agent/.env
-_ensure_symfony_dotenv_bootstrap() {
-  local f d
-  for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
-    [ -f "$f" ] && continue
-    d="${f}.dist"
-    if [ -f "$d" ]; then
-      echo "Aviso: creando $f desde $(basename "$d") (no existía; Infisical no puede fusionar a Symfony sin .env base)." >&2
-      cp -a "$d" "$f"
-    else
-      : > "$f"
-      echo "Aviso: creado $f vacío (falta .env.dist en $(dirname "$f") )." >&2
-    fi
-  done
-}
-_ensure_symfony_dotenv_bootstrap
-
-_merge_symfony_dotenv_from_admin_agent() {
-  local agent_env k line v f
-  agent_env="$REPO_ROOT/$AGENT_SUB/.env"
-  [ -f "$agent_env" ] || return 0
-  for k in ADMIN_AGENT_INTERNAL_URL ADMIN_AGENT_SECRET ADMIN_AGENT_PAGE_KEY; do
-    line=$(grep -m1 "^[[:space:]]*${k}=" "$agent_env" 2>/dev/null || true)
-    [ -n "$line" ] || continue
-    v="${line#*=}"
-    if [ "$k" = "ADMIN_AGENT_PAGE_KEY" ] && _is_dotenv_value_empty "$v"; then
-      continue
-    fi
-    for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
-      [ -f "$f" ] || continue
-      if grep -q "^[[:space:]]*${k}=" "$f" 2>/dev/null; then
-        grep -v "^[[:space:]]*${k}=" "$f" > "${f}.new" 2>/dev/null || : > "${f}.new"
-        mv "${f}.new" "$f"
-      fi
-      printf '%s=%s\n' "$k" "$v" >> "$f"
-    done
-  done
-}
-_merge_symfony_dotenv_from_admin_agent
-
-# Infisical a veces no define ADMIN_AGENT_PAGE_KEY en el secret; evita el flash "Falta…" hasta que se suba la clave
-_ensure_page_key_in_php_env_from_dist() {
-  local distline
-  distline=$(grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$REPO_ROOT/portal/.env.dist" 2>/dev/null || grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$REPO_ROOT/current/.env.dist" 2>/dev/null || true)
-  [ -n "$distline" ] || return 0
-  for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
-    [ -f "$f" ] || continue
-    val=""
-    if grep -qE '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null; then
-      val=$(grep -m1 '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null | cut -d= -f2-)
-    fi
-    if ! _is_dotenv_value_empty "$val"; then
-      continue
-    fi
-    if grep -qE '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" 2>/dev/null; then
-      grep -v '^[[:space:]]*ADMIN_AGENT_PAGE_KEY=' "$f" > "${f}.new" 2>/dev/null || : > "${f}.new"
-      mv "${f}.new" "$f"
-    fi
-    printf '%s\n' "$distline" >> "$f"
-    echo "Aviso: ADMIN_AGENT_PAGE_KEY rellenado desde .env.dist en $f (pon la clave real en Infisical si no está)" >&2
-  done
-}
-_ensure_page_key_in_php_env_from_dist
-
+_sync_symfony_admin_keys_from_agent_env
 echo "OK Infisical → $OUT"
