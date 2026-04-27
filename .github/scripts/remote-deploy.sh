@@ -201,11 +201,13 @@ if mkdir -p "$TOP/current/var" "$TOP/portal/var" 2>/dev/null; then
   fi
 fi
 # Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony
-# No ocultar fallos: caché basura o permisos suelen causar HTTP 500 en app.mdtprevencion.com
+# (también vía CI: GitHub Actions ejecuta este script en la VM; no hace falta cache:clear a mano.)
+# --no-warmup: rápido en deploy; el primer request calienta. Si prefieres cache listo: añade cache:warmup.
 for _symf in "$TOP/current" "$TOP/portal" "$TOP"; do
   [ -f "$_symf/bin/console" ] || continue
   if ! (cd "$_symf" && php bin/console cache:clear --env=prod --no-warmup); then
     echo "ERROR: cache:clear falló en $_symf. Prueba: sudo chown -R $(id -u -n):$(id -g -n) $_symf/var" >&2
+    exit 1
   fi
 done
 # Inmediatamente tras cache:clear, var/ suele quedar u:ug sin grupo www-data → Apache no escribe

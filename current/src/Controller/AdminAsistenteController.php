@@ -181,18 +181,17 @@ class AdminAsistenteController extends AbstractController
         if (null !== $history) {
             $payload['messages'] = $history;
         }
-        $context = stream_context_create(array(
-            'http' => array(
-                'method' => 'POST',
-                'header' => "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\n",
-                'content' => json_encode($payload),
-                'timeout' => 130,
-            ),
+        $fetch = $this->fetchAdminAgent($url, array(
+            'method' => 'POST',
+            'header' => "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\n",
+            'content' => json_encode($payload),
+            'timeout' => 130,
         ));
-        $result = @file_get_contents($url, false, $context);
-        if (false === $result) {
-            return new JsonResponse(array('error' => 'agent_unreachable', 'detail' => 'No response from admin_agent. Is uvicorn running?'), 502);
+        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?');
+        if (null !== $fail) {
+            return $fail;
         }
+        $result = $fetch['body'];
         $decoded = json_decode($result, true);
         if (!is_array($decoded) || !isset($decoded['reply'])) {
             return new JsonResponse(array('error' => 'bad_response', 'raw' => substr($result, 0, 500)), 502);
@@ -212,17 +211,16 @@ class AdminAsistenteController extends AbstractController
             return new JsonResponse(array('error' => 'agent_not_configured'), 503);
         }
         $url = $base.'/v1/index/status';
-        $context = stream_context_create(array(
-            'http' => array(
-                'method' => 'GET',
-                'header' => "X-Admin-Agent-Secret: ".$internalSecret."\r\n",
-                'timeout' => 30,
-            ),
+        $fetch = $this->fetchAdminAgent($url, array(
+            'method' => 'GET',
+            'header' => "X-Admin-Agent-Secret: ".$internalSecret."\r\n",
+            'timeout' => 30,
         ));
-        $result = @file_get_contents($url, false, $context);
-        if (false === $result) {
-            return new JsonResponse(array('error' => 'agent_unreachable'), 502);
+        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?');
+        if (null !== $fail) {
+            return $fail;
         }
+        $result = $fetch['body'];
         $decoded = json_decode($result, true);
         if (!is_array($decoded)) {
             return new JsonResponse(array('error' => 'bad_response'), 502);
@@ -250,24 +248,71 @@ class AdminAsistenteController extends AbstractController
             return new JsonResponse(array('error' => 'agent_not_configured'), 503);
         }
         $url = $base.'/v1/reindex';
-        $context = stream_context_create(array(
-            'http' => array(
-                'method' => 'POST',
-                'header' => "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\n",
-                'content' => json_encode(array('full' => $full)),
-                'timeout' => 600,
-            ),
+        $fetch = $this->fetchAdminAgent($url, array(
+            'method' => 'POST',
+            'header' => "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\n",
+            'content' => json_encode(array('full' => $full)),
+            'timeout' => 600,
         ));
-        $result = @file_get_contents($url, false, $context);
-        if (false === $result) {
-            return new JsonResponse(array('error' => 'agent_unreachable', 'detail' => 'Timeout o servicio detenido'), 502);
+        $fail = $this->adminAgentFailureResponse($fetch, 'Timeout o servicio detenido');
+        if (null !== $fail) {
+            return $fail;
         }
+        $result = $fetch['body'];
         $decoded = json_decode($result, true);
         if (!is_array($decoded)) {
             return new JsonResponse(array('error' => 'bad_response', 'raw' => substr((string) $result, 0, 500)), 502);
         }
 
         return new JsonResponse($decoded, 200);
+    }
+
+    /**
+     * PHP http wrapper returns false on 4xx/5xx unless ignore_errors is true; then we read status from $http_response_header.
+     *
+     * @param array<string, mixed> $httpOptions options for stream_context_create http
+     *
+     * @return array{body: string|false, status: int|null}
+     */
+    private function fetchAdminAgent(string $url, array $httpOptions): array
+    {
+        $httpOptions['ignore_errors'] = true;
+        $context = stream_context_create(array('http' => $httpOptions));
+        $body = @file_get_contents($url, false, $context);
+        $status = null;
+        if (isset($http_response_header[0]) && preg_match('{HTTP/\S+\s+(\d+)\s*}', $http_response_header[0], $m)) {
+            $status = (int) $m[1];
+        }
+
+        return array(
+            'body' => false === $body ? false : (string) $body,
+            'status' => $status,
+        );
+    }
+
+    /**
+     * @param array{body: string|false, status: int|null} $fetch
+     */
+    private function adminAgentFailureResponse(array $fetch, string $unreachableDetail): ?JsonResponse
+    {
+        if (false === $fetch['body']) {
+            return new JsonResponse(array('error' => 'agent_unreachable', 'detail' => $unreachableDetail), 502);
+        }
+        if (401 === $fetch['status']) {
+            return new JsonResponse(array(
+                'error' => 'agent_unauthorized',
+                'detail' => 'ADMIN_AGENT_SECRET en .env de Symfony debe coincidir con portal/admin_agent/.env (sin espacios/CRLF distintos). Tras cambiar: cache:clear y reiniciar uvicorn.',
+            ), 502);
+        }
+        if (null !== $fetch['status'] && $fetch['status'] >= 400) {
+            return new JsonResponse(array(
+                'error' => 'agent_http_error',
+                'http_status' => $fetch['status'],
+                'detail' => substr($fetch['body'], 0, 500),
+            ), 502);
+        }
+
+        return null;
     }
 
     private function isAgentPageUnlocked(Request $request): bool
