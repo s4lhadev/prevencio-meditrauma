@@ -212,17 +212,17 @@ done
 # (RuntimeException: Unable to write in var/cache/prod). Re-aplicar var/ antes del chown total.
 WEB_USER="${DEPLOY_WEB_USER:-www-data}"
 U="$(id -u -n)"
-# chown U:www-data: sin sudo si el dueño es U y U pertenece a grupo $WEB_USER (id -nG | grep)
+# chown U:www-data: "chown -R" falla si bajo el árbol hay aunque sea un inode de otro dueño
+# (root, www-data, copias viejos). Sólo ajustar lo de $U; luego intentar -R y sudo -n.
 _chown_ug() {
   local p="$1"
   [ -e "$p" ] || return 0
-  if chown -R "$U:$WEB_USER" "$p" 2>/dev/null; then
-    return 0
+  find "$p" -xdev -user "$U" -exec chown -h "$U:$WEB_USER" {} + 2>/dev/null || true
+  chown -R "$U:$WEB_USER" "$p" 2>/dev/null || true
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -n chown -R "$U:$WEB_USER" "$p" 2>/dev/null || true
   fi
-  if command -v sudo >/dev/null 2>&1 && sudo -n chown -R "$U:$WEB_USER" "$p" 2>/dev/null; then
-    return 0
-  fi
-  return 1
+  return 0
 }
 _chmod_ug_dir() {
   local p="$1"
@@ -237,11 +237,8 @@ _chmod_ug_dir() {
 if getent group "$WEB_USER" >/dev/null 2>&1; then
   for _app in "$TOP/current" "$TOP/portal"; do
     [ -d "$_app/var" ] || continue
-    if _chown_ug "$_app/var"; then
-      _chmod_ug_dir "$_app/var"
-    else
-      echo "Aviso: chown a $U:$WEB_USER falló en $_app/var. Ejecuta UNA VEZ: sudo usermod -aG $WEB_USER $U; nueva sesión SSH; o: sudo chown -R $U:$WEB_USER $_app/var" >&2
-    fi
+    _chown_ug "$_app/var"
+    _chmod_ug_dir "$_app/var"
   done
 fi
 if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
@@ -256,10 +253,7 @@ if ! getent group "$WEB_USER" >/dev/null 2>&1; then
 fi
 for _app in "$TOP/current" "$TOP/portal"; do
   [ -d "$_app" ] || continue
-  if ! _chown_ug "$_app"; then
-    echo "ERROR: chown a $U:$WEB_USER falló en $_app. 1) sudo usermod -aG $WEB_USER $U (nueva sesión SSH) 2) o sudoers: .github/sudoers/99-prevencion-deploy 3) o: sudo chown -R $U:$WEB_USER $_app" >&2
-    exit 1
-  fi
+  _chown_ug "$_app"
   find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
   find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
   if command -v sudo >/dev/null 2>&1; then
@@ -278,7 +272,10 @@ fi
 # Comprobar grupo en var/ (setgid 2775 + grupo www-data)
 _vg="$(stat -c '%G' "$TOP/current/var" 2>/dev/null || true)"
 if [ "$_vg" != "$WEB_USER" ]; then
-  echo "ERROR: $TOP/current/var debería tener grupo $WEB_USER; ahora: ${_vg:-desconocido}. Tras: sudo usermod -aG $WEB_USER $U, cierra y abre la sesión SSH (o: sudo chown -R $U:$WEB_USER $TOP/current/var). ve .github/CICD-SETUP.md" >&2
+  echo "ERROR: $TOP/current/var debería tener grupo $WEB_USER; ahora: ${_vg:-desconocido}." >&2
+  echo "  Normalizar dueños (ficheros de root/www-data mezclados): sudo chown -R $U:$G_PRE $TOP/current $TOP/portal" >&2
+  echo "  y luego: sudo chown -R $U:$WEB_USER $TOP/current/var $TOP/portal/var" >&2
+  echo "  o .github/sudoers/99-prevencion-deploy. ve .github/CICD-SETUP.md" >&2
   exit 1
 fi
 echo "OK deploy prevencion $TOP"
