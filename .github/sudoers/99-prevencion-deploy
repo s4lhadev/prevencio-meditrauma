@@ -1,0 +1,13 @@
+# Fichero de ejemplo: copia a /etc/sudoers.d/ en la VM.
+#
+#   sudo install -m 440 -o root -g root 99-prevencion-deploy /etc/sudoers.d/99-prevencion-deploy
+#   sudo visudo -c -f /etc/sudoers.d/99-prevencion-deploy
+#
+# Sustituye "administrador" por el usuario SSH del workflow (mismo que DEPLOY_USER).
+# Si un comando "no está permitido", en la VM: type chown chmod find chgrp systemctl
+# (Debian: casi todo en /usr/bin; a veces /bin es enlace a /usr/bin)
+
+Defaults:administrador !requiretty
+Defaults:administrador !lecture
+
+administrador ALL=(ALL) NOPASSWD: /usr/bin/chown, /bin/chown, /usr/bin/chmod, /bin/chmod, /usr/bin/chgrp, /bin/chgrp, /usr/bin/find, /bin/find, /usr/bin/systemctl, /bin/systemctl

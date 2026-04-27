@@ -191,11 +191,14 @@ if [ -d portal/admin_agent ] && [ -f portal/admin_agent/requirements.txt ]; then
 elif [ -d admin_agent ] && [ -f admin_agent/requirements.txt ]; then
   _admin_agent_venv "admin_agent"
 fi
-# var/ a veces queda con dueño www-data (deploy anterior); el usuario de deploy no puede crear var/cache → falla console
-# y app.mdtprevencion.com (current) devuelve 500.
-if command -v sudo >/dev/null 2>&1; then
-  mkdir -p "$TOP/current/var" "$TOP/portal/var" 2>/dev/null || true
-  sudo -n chown -R "$(id -u -n):$(id -g -n)" "$TOP/current/var" "$TOP/portal/var" 2>/dev/null || true
+# var/ a veces queda con dueño www-data (deploy anterior); hace falta vuelve a u:g primario
+# para cache:clear. Sin sudo: chown a tu uid solo si eres el dueño; con sudo: cualquier mezcla.
+U_PRE="$(id -u -n)"
+G_PRE="$(id -g -n)"
+if mkdir -p "$TOP/current/var" "$TOP/portal/var" 2>/dev/null; then
+  if ! chown -R "$U_PRE:$G_PRE" "$TOP/current/var" "$TOP/portal/var" 2>/dev/null; then
+    command -v sudo >/dev/null 2>&1 && sudo -n chown -R "$U_PRE:$G_PRE" "$TOP/current/var" "$TOP/portal/var" 2>/dev/null || true
+  fi
 fi
 # Tras Infisical → .env de portal/current, limpiar caché en *cada* app Symfony
 # No ocultar fallos: caché basura o permisos suelen causar HTTP 500 en app.mdtprevencion.com
@@ -209,48 +212,73 @@ done
 # (RuntimeException: Unable to write in var/cache/prod). Re-aplicar var/ antes del chown total.
 WEB_USER="${DEPLOY_WEB_USER:-www-data}"
 U="$(id -u -n)"
-if command -v sudo >/dev/null 2>&1 && getent group "$WEB_USER" >/dev/null 2>&1; then
+# chown U:www-data: sin sudo si el dueño es U y U pertenece a grupo $WEB_USER (id -nG | grep)
+_chown_ug() {
+  local p="$1"
+  [ -e "$p" ] || return 0
+  if chown -R "$U:$WEB_USER" "$p" 2>/dev/null; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo -n chown -R "$U:$WEB_USER" "$p" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+_chmod_ug_dir() {
+  local p="$1"
+  [ -d "$p" ] || return 0
+  find "$p" -type d -exec chmod 2775 {} \; 2>/dev/null || true
+  find "$p" -type f -exec chmod 664 {} \; 2>/dev/null || true
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -n find "$p" -type d -exec chmod 2775 {} \; 2>/dev/null || true
+    sudo -n find "$p" -type f -exec chmod 664 {} \; 2>/dev/null || true
+  fi
+}
+if getent group "$WEB_USER" >/dev/null 2>&1; then
   for _app in "$TOP/current" "$TOP/portal"; do
     [ -d "$_app/var" ] || continue
-    if sudo -n chown -R "$U:$WEB_USER" "$_app/var" 2>/dev/null; then
-      sudo -n find "$_app/var" -type d -exec chmod 2775 {} \; 2>/dev/null || true
-      sudo -n find "$_app/var" -type f -exec chmod 664 {} \; 2>/dev/null || true
+    if _chown_ug "$_app/var"; then
+      _chmod_ug_dir "$_app/var"
     else
-      echo "ERROR: sudo -n chown falló en $_app/var. Sin NOPASSWD, fija a mano: sudo chown -R $U:$WEB_USER $_app/var && find $_app/var -type d -exec sudo chmod 2775 {} \\;" >&2
+      echo "Aviso: chown a $U:$WEB_USER falló en $_app/var. Ejecuta UNA VEZ: sudo usermod -aG $WEB_USER $U; nueva sesión SSH; o: sudo chown -R $U:$WEB_USER $_app/var" >&2
     fi
   done
 fi
 if systemctl is-active --quiet prevencion-admin-agent 2>/dev/null; then
-  sudo systemctl restart prevencion-admin-agent || true
+  sudo -n systemctl restart prevencion-admin-agent 2>/dev/null || true
 fi
 # Apache (www-data) y el usuario de deploy: mismo grupo en todo current/ y portal/
 #  - NUNCA dejar var/ solo como www-data:www-data: el deploy no podrá cache:clear (portal lo mostró)
-#  - Dirs 2775 (setgid) + files 664: www-data (grupo) lee config/, public/build/manifest.json; u escribe en var/
-if command -v sudo >/dev/null 2>&1 && getent group "$WEB_USER" >/dev/null 2>&1; then
-  for _app in "$TOP/current" "$TOP/portal"; do
-    [ -d "$_app" ] || continue
-    if ! sudo -n chown -R "$U:$WEB_USER" "$_app" 2>/dev/null; then
-      echo "ERROR: sudo -n chown falló en $_app (el usuario de deploy necesita NOPASSWD para chown bajo $TOP, o 500 al cargar la web)." >&2
-      exit 1
-    fi
-    sudo -n find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
-    sudo -n find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
-    for _f in "$_app/.env" "$_app/.env.local" "$_app/.env.local.php"; do
-      [ -f "$_f" ] || continue
-      sudo -n chgrp "$WEB_USER" "$_f" 2>/dev/null && sudo -n chmod 640 "$_f" 2>/dev/null || true
-    done
-  done
-  if [ -d "$TOP/var" ]; then
-    sudo -n chown -R "$U:$WEB_USER" "$TOP/var" 2>/dev/null || true
-  fi
-  # Comprobar grupo (sin "sudo -u www-data", que a veces no está en sudoers aunque chown sí)
-  _vg="$(stat -c '%G' "$TOP/current/var" 2>/dev/null || true)"
-  if [ "$_vg" != "$WEB_USER" ]; then
-    echo "ERROR: $TOP/current/var debería tener grupo $WEB_USER; ahora: ${_vg:-desconocido}. Apache no podrá escribir caché (HTTP 500). ve .github/CICD-SETUP.md (NOPASSWD chown)" >&2
+#  - Dirs 2775 (setgid) + files 664: _chown_ug sin sudo si $U∈$WEB_USER; si no, NOPASSWD o chown a mano
+if ! getent group "$WEB_USER" >/dev/null 2>&1; then
+  echo "ERROR: no existe el grupo de sistema $WEB_USER." >&2
+  exit 1
+fi
+for _app in "$TOP/current" "$TOP/portal"; do
+  [ -d "$_app" ] || continue
+  if ! _chown_ug "$_app"; then
+    echo "ERROR: chown a $U:$WEB_USER falló en $_app. 1) sudo usermod -aG $WEB_USER $U (nueva sesión SSH) 2) o sudoers: .github/sudoers/99-prevencion-deploy 3) o: sudo chown -R $U:$WEB_USER $_app" >&2
     exit 1
   fi
-else
-  echo "ERROR: falta sudo o no existe el grupo $WEB_USER; no se pudieron fijar permisos (requerido para Apache + Symfony)." >&2
+  find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
+  find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -n find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
+    sudo -n find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
+  fi
+  for _f in "$_app/.env" "$_app/.env.local" "$_app/.env.local.php"; do
+    [ -f "$_f" ] || continue
+    chgrp "$WEB_USER" "$_f" 2>/dev/null && chmod 640 "$_f" 2>/dev/null || true
+    sudo -n chgrp "$WEB_USER" "$_f" 2>/dev/null && sudo -n chmod 640 "$_f" 2>/dev/null || true
+  done
+done
+if [ -d "$TOP/var" ]; then
+  _chown_ug "$TOP/var" 2>/dev/null || true
+fi
+# Comprobar grupo en var/ (setgid 2775 + grupo www-data)
+_vg="$(stat -c '%G' "$TOP/current/var" 2>/dev/null || true)"
+if [ "$_vg" != "$WEB_USER" ]; then
+  echo "ERROR: $TOP/current/var debería tener grupo $WEB_USER; ahora: ${_vg:-desconocido}. Tras: sudo usermod -aG $WEB_USER $U, cierra y abre la sesión SSH (o: sudo chown -R $U:$WEB_USER $TOP/current/var). ve .github/CICD-SETUP.md" >&2
   exit 1
 fi
 echo "OK deploy prevencion $TOP"

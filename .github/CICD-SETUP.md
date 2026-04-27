@@ -29,11 +29,13 @@ En la VM: remoto `git@github.com:…` (SSH a GitHub) y, si aplica, `sudo` para e
 
 **HTTP 500 y en el log de Apache: `Unable to write in the "cache" directory` (`var/cache/prod`):** Apache corre como `www-data`; el script deja `var/` con `chown` **usuario_de_deploy:www-data** y directorios `2775` para que el grupo pueda escribir. Hace falta `sudo` (en CI suele ser `sudo -n` → en la VM configura `NOPASSWD` para el usuario de deploy sobre ese path) o, **una vez** a mano: `sudo chown -R deploy:www-data RUTA/current/var` y `sudo find RUTA/current/var -type d -exec chmod 2775 {} \;`. No uses solo `www-data:www-data` en todo el repo o el siguiente `cache:clear` vía deploy puede fallar. En **producción** `APP_ENV=prod`; el `.env` en el server no se commitea.
 
-**`ERROR: sudo -n chown falló` en Actions:** el usuario SSH (p. ej. `administrador`) no puede usar `sudo` sin TTY y contraseña. En la VM, como root: `visudo -f /etc/sudoers.d/deploy-prevencion` y añade una línea (ajusta el nombre de usuario; en Debian 12+ comprueba con `type chown` — suele ser `/usr/bin/chown`):
+**Permisos sin tocar `sudoers` (recomendado en Debian):** el usuario con el que hace SSH el workflow debe ser miembro de **`www-data`**: `sudo usermod -aG www-data administrador` (ajusta el nombre). La **siguiente** conexión SSH (cada run de GitHub) carga el grupo. El script hace `chown usuario:www-data` **sin** `sudo` para los ficheros del deploy; basta con eso en muchas instalaciones. Si aún mezclan dueños (p. ej. raíz bajo `vendor/`), un `sudo chown` puntual o el fichero de `sudoers` de abajo.
 
-`administrador ALL=(ALL) NOPASSWD: /usr/bin/chown, /bin/chown, /usr/bin/chmod, /bin/chmod, /usr/bin/find`
+**`ERROR: sudo -n chown falló` / chown a `…:www-data` falló** (Actions): o bien aplicas lo anterior (`usermod -aG www-data` + nuevo deploy) o dejas **NOPASSWD** para que el script use `sudo -n` cuando haga falta. Hay un ejemplo en **`.github/sudoers/99-prevencion-deploy`**. Instala con:
 
-Hasta eso, tras cada deploy tendrás que ejecutar a mano el `chown`/`find` que imprime el log. Mientras tanto, el job puede quedar en rojo al final del script. Alternativa ancha (solo para desbloquear): `administrador ALL=(ALL) NOPASSWD: ALL` y luego restringe.
+`sudo install -m 440 -o root -g root /ruta/al/repo/.github/sudoers/99-prevencion-deploy /etc/sudoers.d/99-prevencion-deploy`
+
+Edítalo antes si el usuario de deploy no se llama `administrador`. Valida con `sudo visudo -c -f /etc/sudoers.d/99-prevencion-deploy`. Prueba: `sudo -n chown -h` (no debe pedir clave). Si un binario falla, `type chown chmod find chgrp systemctl` y añade la ruta que use tu sistema. Mientras no esté esto, el job termina en rojo y el sitio puede dar 500 sin el `chown` manual.
 
 **Falta `public/build/manifest.json` (Webpack):** el build debe ejecutarse en el **mismo** directorio que el docroot; si Nginx/Apache apunta a `.../current/public` y en el clone solo hay `portal/`, deja alineado con `cd /ruta/prevencio && ln -sfn portal current`. El script ahora hace `npm run build` en `current/` (primero) y en `portal/`, sin duplicar la misma ruta real. Si aún no hay manifiesto, en la VM: `(cd ruta-symfony && npm ci && npm run build)`.
 
