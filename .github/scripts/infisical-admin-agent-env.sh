@@ -22,6 +22,23 @@ _is_dotenv_value_empty() {
   return 1
 }
 
+_normalize_merge_dotenv_value() {
+  local v="$1"
+  v=$(printf '%s' "$v" | tr -d '\r')
+  v=$(printf '%s' "$v" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  case "$v" in
+  \"*\")
+    v="${v#\"}"
+    v="${v%\"}"
+    ;;
+  \'*\')
+    v="${v#\'}"
+    v="${v%\'}"
+    ;;
+  esac
+  printf '%s' "$v"
+}
+
 AGENT_SUB=""
 if [ -f "$REPO_ROOT/portal/admin_agent/requirements.txt" ]; then
   AGENT_SUB="portal/admin_agent"
@@ -56,6 +73,7 @@ _merge_symfony_dotenv_from_admin_agent() {
     line=$(grep -m1 "^[[:space:]]*${k}=" "$agent_env" 2>/dev/null || true)
     [ -n "$line" ] || continue
     v="${line#*=}"
+    v="$(_normalize_merge_dotenv_value "$v")"
     if [ "$k" = "ADMIN_AGENT_PAGE_KEY" ] && _is_dotenv_value_empty "$v"; then
       continue
     fi

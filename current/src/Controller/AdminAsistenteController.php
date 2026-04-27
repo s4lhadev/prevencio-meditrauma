@@ -47,6 +47,12 @@ class AdminAsistenteController extends AbstractController
         }
     }
 
+    /** Mismo criterio que admin_agent (trim): evita 401 por espacios/CRLF en ADMIN_AGENT_SECRET. */
+    private function adminAgentSecret(): string
+    {
+        return trim((string) $this->getParameter('admin_agent.secret'));
+    }
+
     public function index(Request $request): Response
     {
         $pageKey = trim((string) $this->getParameter('admin_agent.page_key'));
@@ -67,7 +73,7 @@ class AdminAsistenteController extends AbstractController
         $this->logAdmin('debug', 'admin_asistente.index: unlocked, rendering assistant', $this->unlockDebugContext($request, $pageKey));
 
         $base = (string) $this->getParameter('admin_agent.internal_url');
-        $secret = (string) $this->getParameter('admin_agent.secret');
+        $secret = $this->adminAgentSecret();
         if ($base === '' || $secret === '' || $secret === 'change_me_match_admin_agent_env') {
             $configured = false;
         } else {
@@ -127,7 +133,7 @@ class AdminAsistenteController extends AbstractController
         $this->logAdmin('info', 'admin_asistente.unlock: success, render assistant (200+Set-Cookie+replaceState)', $this->unlockDebugContext($request, $pageKey));
 
         $base = (string) $this->getParameter('admin_agent.internal_url');
-        $secret = (string) $this->getParameter('admin_agent.secret');
+        $secret = $this->adminAgentSecret();
         $configured = !($base === '' || $secret === '' || $secret === 'change_me_match_admin_agent_env');
 
         $response = $this->render('admin_asistente/index.html.twig', array(
@@ -171,7 +177,7 @@ class AdminAsistenteController extends AbstractController
         $history = isset($data['messages']) && is_array($data['messages']) ? $data['messages'] : null;
 
         $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
-        $internalSecret = (string) $this->getParameter('admin_agent.secret');
+        $internalSecret = $this->adminAgentSecret();
         if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
             return new JsonResponse(array('error' => 'agent_not_configured'), 503);
         }
@@ -206,7 +212,7 @@ class AdminAsistenteController extends AbstractController
             return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
         }
         $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
-        $internalSecret = (string) $this->getParameter('admin_agent.secret');
+        $internalSecret = $this->adminAgentSecret();
         if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
             return new JsonResponse(array('error' => 'agent_not_configured'), 503);
         }
@@ -243,7 +249,7 @@ class AdminAsistenteController extends AbstractController
         }
         $full = !empty($data['full']);
         $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
-        $internalSecret = (string) $this->getParameter('admin_agent.secret');
+        $internalSecret = $this->adminAgentSecret();
         if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
             return new JsonResponse(array('error' => 'agent_not_configured'), 503);
         }
@@ -301,7 +307,7 @@ class AdminAsistenteController extends AbstractController
         if (401 === $fetch['status']) {
             return new JsonResponse(array(
                 'error' => 'agent_unauthorized',
-                'detail' => 'ADMIN_AGENT_SECRET en .env de Symfony debe coincidir con portal/admin_agent/.env (sin espacios/CRLF distintos). Tras cambiar: cache:clear y reiniciar uvicorn.',
+                'detail' => 'ADMIN_AGENT_SECRET: misma cadena exacta en portal/admin_agent/.env y current/.env (y portal/.env si aplica). Revisa .env.local / .env.local.php (pueden pisar). Tras alinear: cache:clear y reiniciar uvicorn. Deploy fusiona desde admin_agent si hay INFISICAL_TOKEN o admin_agent/.env.',
             ), 502);
         }
         if (null !== $fetch['status'] && $fetch['status'] >= 400) {
