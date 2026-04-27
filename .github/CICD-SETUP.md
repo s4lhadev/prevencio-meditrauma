@@ -17,7 +17,7 @@ Misma idea que en Medisalut: el runner entra al tailnet, luego **SSH** a la VM (
 
 **Infisical:** solo hace falta el token. Tras el export fuerza `APP_PRODUCT=prevencion`. Mismo orden de instalación del CLI que en `medisalut` (`npx` → `~/.local/bin` → `apt` con `sudo -n`).
 
-Claves típicas: `ADMIN_AGENT_SECRET`, `OPENROUTER_*`, `APP_PRODUCT`. Alinea `ADMIN_AGENT_*` en Symfony (`current/.env`) con el mismo secreto y uvicorn.
+En el **mismo** proyecto/entorno de Infisical que inyecta `portal/admin_agent/.env` (p. ej. `production` o `prod`), el nombre de la clave **debe** coincidir: `ADMIN_AGENT_INTERNAL_URL`, `ADMIN_AGENT_SECRET`, `ADMIN_AGENT_PAGE_KEY` (y lo que tenga el Python). Si `ADMIN_AGENT_PAGE_KEY` no existe o está vacía, Symfony se queda con valor vacío y verás *Falta ADMIN_AGENT_PAGE_KEY*; el script intenta rellenarla desde `current/.env.dist` si el fichero `current/.env` o `portal/.env` **existía o se crea copiando** `.env.dist` cuando faltan (p. ej. primer deploy). Comprueba en la VM, tras un deploy, que `current/.env` tenga `ADMIN_AGENT_PAGE_KEY=…` (no vacío) y que en GitHub *Actions* el secret `INFISICAL_TOKEN` esté definido y sea del proyecto correcto.
 
 **`ensurepip is not available` / fallo al crear `portal/admin_agent/.venv`:** en Debian, instala el venv de ese Python, p. ej. `sudo apt install -y python3-venv` o el paquete concreto que sugiere el error (`python3.13-venv`, etc.). Sin eso, `pip install` del admin agent no se ejecuta; el resto del deploy (Symfony, npm) sigue.
 

@@ -126,6 +126,23 @@ if [ -n "${APP_PRODUCT_OVERRIDE:-}" ]; then
   echo "APP_PRODUCT=$APP_PRODUCT_OVERRIDE" >> "$OUT"
 fi
 
+# Si no hay .env de Symfony, el merge a continuación no hace nada; Infisical solo llena admin_agent/.env
+_ensure_symfony_dotenv_bootstrap() {
+  local f d
+  for f in "$REPO_ROOT/portal/.env" "$REPO_ROOT/current/.env"; do
+    [ -f "$f" ] && continue
+    d="${f}.dist"
+    if [ -f "$d" ]; then
+      echo "Aviso: creando $f desde $(basename "$d") (no existía; Infisical no puede fusionar a Symfony sin .env base)." >&2
+      cp -a "$d" "$f"
+    else
+      : > "$f"
+      echo "Aviso: creado $f vacío (falta .env.dist en $(dirname "$f") )." >&2
+    fi
+  done
+}
+_ensure_symfony_dotenv_bootstrap
+
 _merge_symfony_dotenv_from_admin_agent() {
   local agent_env k line v f
   agent_env="$REPO_ROOT/$AGENT_SUB/.env"
