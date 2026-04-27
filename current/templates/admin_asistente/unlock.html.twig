@@ -29,7 +29,7 @@
         <div class="err">{{ message }}</div>
     {% endfor %}
     <form method="post" action="{{ path('admin_asistente_unlock') }}">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token('admin_asistente_unlock') }}">
+        <input type="hidden" name="unlock_csrf" value="{{ unlock_csrf }}">
         <label for="key">Clave</label>
         <input id="key" name="key" type="password" autocomplete="off" required autofocus>
         <button type="submit">Entrar</button>

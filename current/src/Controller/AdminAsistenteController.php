@@ -23,6 +23,11 @@ class AdminAsistenteController extends AbstractController
     /** Alineado con config/packages/framework.yaml session.cookie_lifetime */
     private const UNLOCK_COOKIE_LIFETIME = 18000;
 
+    /** Anti-CSRF del formulario /agent sin depender de sesión PHP (sesión a menudo no persiste GET→POST). */
+    private const UNLOCK_CSRF_COOKIE = 'admin_asistente_csrf';
+
+    private const UNLOCK_CSRF_LIFETIME = 900;
+
     /** @var LoggerInterface */
     private $logger;
 
@@ -53,7 +58,11 @@ class AdminAsistenteController extends AbstractController
         if (!$this->isAgentPageUnlocked($request)) {
             $this->logAdmin('info', 'admin_asistente.index: not unlocked, showing form', $this->unlockDebugContext($request, $pageKey));
 
-            return $this->render('admin_asistente/unlock.html.twig');
+            $nonce = bin2hex(random_bytes(16));
+            $response = $this->render('admin_asistente/unlock.html.twig', array('unlock_csrf' => $nonce));
+            $this->addUnlockCsrfCookie($response, $request, $nonce);
+
+            return $response;
         }
         $this->logAdmin('debug', 'admin_asistente.index: unlocked, rendering assistant', $this->unlockDebugContext($request, $pageKey));
 
@@ -84,14 +93,15 @@ class AdminAsistenteController extends AbstractController
 
             return $this->redirectToRoute('admin_asistente');
         }
-        $csrfToken = (string) $request->request->get('_csrf_token', '');
-        $csrfOk = $this->isCsrfTokenValid('admin_asistente_unlock', $csrfToken);
+        $postedCsrf = (string) $request->request->get('unlock_csrf', '');
+        $cookieCsrf = (string) $request->cookies->get(self::UNLOCK_CSRF_COOKIE, '');
+        $csrfOk = $postedCsrf !== '' && $cookieCsrf !== '' && hash_equals($cookieCsrf, $postedCsrf);
         if (!$csrfOk) {
-            $this->logAdmin('warning', 'admin_asistente.unlock: CSRF failed', array_merge(
+            $this->logAdmin('warning', 'admin_asistente.unlock: form token failed (cookie vs POST)', array_merge(
                 $this->unlockDebugContext($request, $pageKey),
-                array('csrf_token_len' => strlen($csrfToken))
+                array('unlock_csrf_post_len' => strlen($postedCsrf), 'unlock_csrf_cookie_len' => strlen($cookieCsrf))
             ));
-            $this->addFlash('error', 'Sesión de seguridad inválida. Prueba otra vez.');
+            $this->addFlash('error', 'El formulario caducó o la cookie no llegó. Recarga la página e inténtalo de nuevo.');
 
             return $this->redirectToRoute('admin_asistente');
         }
@@ -125,6 +135,7 @@ class AdminAsistenteController extends AbstractController
             'agent_unlock_notice' => 'Acceso al asistente activado.',
         ));
         $this->addUnlockCookie($response, $request, $pageKey);
+        $this->clearUnlockCsrfCookie($response, $request);
 
         return $response;
     }
@@ -134,6 +145,7 @@ class AdminAsistenteController extends AbstractController
         $request->getSession()->remove(self::SESSION_PAGE_UNLOCK);
         $response = $this->redirectToRoute('admin_asistente');
         $this->clearUnlockCookie($response, $request);
+        $this->clearUnlockCsrfCookie($response, $request);
 
         return $response;
     }
@@ -362,6 +374,38 @@ class AdminAsistenteController extends AbstractController
         $secureFlag = $this->clientUsesTls($request);
         $response->headers->setCookie(new Cookie(
             self::UNLOCK_COOKIE,
+            '',
+            1,
+            '/',
+            null,
+            $secureFlag,
+            true,
+            false,
+            Cookie::SAMESITE_LAX
+        ));
+    }
+
+    private function addUnlockCsrfCookie(Response $response, Request $request, string $nonce): void
+    {
+        $secureFlag = $this->clientUsesTls($request);
+        $response->headers->setCookie(new Cookie(
+            self::UNLOCK_CSRF_COOKIE,
+            $nonce,
+            time() + self::UNLOCK_CSRF_LIFETIME,
+            '/',
+            null,
+            $secureFlag,
+            true,
+            false,
+            Cookie::SAMESITE_LAX
+        ));
+    }
+
+    private function clearUnlockCsrfCookie(Response $response, Request $request): void
+    {
+        $secureFlag = $this->clientUsesTls($request);
+        $response->headers->setCookie(new Cookie(
+            self::UNLOCK_CSRF_COOKIE,
             '',
             1,
             '/',
