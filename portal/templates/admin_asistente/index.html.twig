@@ -67,12 +67,12 @@
             <a class="back" href="{{ path('admin_asistente_logout') }}">Cerrar sesión del asistente</a>
         </div>
         <div class="badges">
-            <span class="badge tier-user">RAG</span>
+            <span class="badge tier-dev">TOOLS</span>
         </div>
     </div>
 
     <h1>Asistente (Prevención)</h1>
-    <p class="sub">Una respuesta por mensaje. Contexto del repositorio vía búsqueda semántica (RAG) cuando está indexado; sin herramientas en tiempo real.</p>
+    <p class="sub">Modo <strong>agente</strong> (estilo operador): el modelo puede usar herramientas en esta máquina — búsqueda en repo, SQL solo lectura vía <code>agent_ro</code>, shell con límites, HTTP a hosts permitidos, logs, Symfony console allowlist, web. Historial en servidor si hay BD del agente. Respuesta única al final (sin streaming).</p>
 
     {% if agent_unlock_notice is defined and agent_unlock_notice %}
         <div class="banner" style="background: rgba(43,182,115,0.12); border-color: rgba(43,182,115,0.45); color: #7ee2b8;">{{ agent_unlock_notice }}</div>
@@ -105,7 +105,7 @@
         <textarea id="input" placeholder="Pregunta lo que quieras (Shift+Enter = nueva línea)…" rows="2"></textarea>
         <button type="button" id="send">Enviar</button>
     </div>
-    <p class="meta">Se reutilizan los últimos turnos de esta pestaña como historial (máx. ~24 en el agente).</p>
+    <p class="meta">Sesión agente: <span class="session-id" id="sessionIdLabel">(se crea al enviar el primer mensaje)</span> · Puede tardar hasta varios minutos si hay muchas herramientas.</p>
 </div>
 
 <script>
@@ -116,7 +116,17 @@
     var log = document.getElementById('log');
     var input = document.getElementById('input');
     var sendBtn = document.getElementById('send');
-    var transcript = [];
+    var sessionId = null;
+
+    function updateSessionLabel() {
+        var el = document.getElementById('sessionIdLabel');
+        if (!el) return;
+        if (sessionId) {
+            el.textContent = sessionId.slice(0, 8) + '…' + sessionId.slice(-4);
+        } else {
+            el.textContent = '(se crea al enviar el primer mensaje)';
+        }
+    }
 
     // ---------- index status (unchanged) ----------
     function ixText(j) {
@@ -188,10 +198,13 @@
         var assistant = startAssistantTurn();
         assistant.body.textContent = '…';
         sendBtn.disabled = true;
-        var payload = { _token: token, message: text, use_codebase: true };
-        if (transcript.length) {
-            payload.messages = transcript;
-        }
+        var payload = {
+            _token: token,
+            message: text,
+            agentic: true,
+            session_id: sessionId,
+            create_session: !sessionId
+        };
         fetch('{{ path('admin_asistente_chat') }}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -201,10 +214,17 @@
         }).then(function (o) {
             if (o.ok && o.j && typeof o.j.reply === 'string') {
                 assistant.body.textContent = o.j.reply;
-                transcript.push({ role: 'user', content: text });
-                transcript.push({ role: 'assistant', content: o.j.reply });
-                if (transcript.length > 48) {
-                    transcript = transcript.slice(-48);
+                if (o.j.session_id) {
+                    sessionId = o.j.session_id;
+                    updateSessionLabel();
+                }
+                if (o.j.tool_trace && o.j.tool_trace.length) {
+                    var done = o.j.tool_trace.filter(function (x) { return x.type === 'result'; });
+                    if (done.length) {
+                        appendNote('Herramientas: ' + done.map(function (x) {
+                            return x.name + (x.ok ? ' ✓' : ' ✗');
+                        }).join(', '));
+                    }
                 }
                 log.scrollTop = log.scrollHeight;
                 return;

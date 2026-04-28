@@ -211,11 +211,25 @@ class AdminAsistenteController extends AbstractController
         if (null !== $history) {
             $payload['messages'] = $history;
         }
+        $agentic = !empty($data['agentic']);
+        if ($agentic) {
+            $payload['agentic'] = true;
+            if (isset($data['session_id']) && is_string($data['session_id']) && $data['session_id'] !== '') {
+                $payload['session_id'] = $data['session_id'];
+            }
+            if (isset($data['create_session'])) {
+                $payload['create_session'] = (bool) $data['create_session'];
+            }
+            if (isset($data['title']) && is_string($data['title'])) {
+                $payload['title'] = $data['title'];
+            }
+        }
+        $timeout = $agentic ? 300 : 130;
         $fetch = $this->fetchAdminAgent($url, array(
             'method' => 'POST',
             'header' => "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\nX-Admin-Agent-Tier: dev\r\n",
             'content' => json_encode($payload),
-            'timeout' => 130,
+            'timeout' => $timeout,
         ));
         $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?', $internalSecret);
         if (null !== $fail) {

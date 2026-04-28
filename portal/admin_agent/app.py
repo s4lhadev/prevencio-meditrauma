@@ -2,7 +2,7 @@
 
 Endpoints:
   GET   /health                       — quick check + secret fingerprint
-  POST  /v1/chat                     — chat + optional codebase RAG (primary UI)
+  POST  /v1/chat                     — RAG (una ida) o agentico con tools (JSON único, sin SSE)
   GET   /v1/index/status              — codebase index status
   POST  /v1/reindex                   — reindex codebase
   GET   /v1/sessions                  — list recent sessions
@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 import config as cfg
 import operator_config as opcfg
 import session_store
-from agent_loop import assistant_message_text
+from agent_loop import assistant_message_text, collect_agent_turn
 from codebase_index import get_index
 
 logging.basicConfig(level=logging.INFO)
@@ -93,11 +93,15 @@ class OperatorConfigUpdateBody(BaseModel):
     updated_by: Optional[str] = "operator"
 
 
-# --- /v1/chat: RAG one-shot, no tools -------------------------------------------------
+# --- /v1/chat: RAG one-shot o agentico (tools, sin streaming HTTP) --------------------
 class LegacyChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=50000)
     messages: Optional[List[Dict[str, Any]]] = None
     use_codebase: bool = True
+    agentic: bool = False
+    session_id: Optional[str] = None
+    create_session: bool = True
+    title: Optional[str] = None
 
 
 class ReindexRequest(BaseModel):
@@ -122,22 +126,47 @@ def health() -> Dict[str, Any]:
 async def legacy_chat(
     body: LegacyChatRequest,
     x_admin_agent_secret: Optional[str] = Header(default=None, alias="X-Admin-Agent-Secret"),
+    x_admin_agent_tier: Optional[str] = Header(default="user", alias="X-Admin-Agent-Tier"),
+    x_admin_agent_who: Optional[str] = Header(default="anon", alias="X-Admin-Agent-Who"),
 ) -> Dict[str, Any]:
-    """Chat with optional semantic codebase context (RAG). No tool calling — one model round-trip."""
+    """Modo legacy: RAG + una ida al modelo. Modo agentico: bucle con herramientas, misma respuesta JSON."""
     _require_secret(x_admin_agent_secret)
     api_key = _openrouter_key()
+    product = (os.getenv("APP_PRODUCT") or "prevencion").strip() or "prevencion"
+
+    if body.agentic:
+        tier = _resolve_tier(x_admin_agent_tier)
+        who = (x_admin_agent_who or "anon").strip()[:200] or "anon"
+        sid = (body.session_id or "").strip() or None
+        if not sid and body.create_session and session_store.enabled():
+            sid = await session_store.create_session(who=who, tier=tier, title=body.title or "")
+        model_agent = (os.getenv("OPENROUTER_MODEL") or "").strip() or None
+        out = await collect_agent_turn(
+            user_message=body.message,
+            tier=tier,
+            session_id=sid,
+            who=who,
+            openrouter_api_key=api_key,
+            model_override=model_agent,
+        )
+        out["product"] = product
+        return out
+
     model = (os.getenv("OPENROUTER_MODEL_LEGACY") or "openai/gpt-4o-mini").strip()
     system = (
-        "You are the Prevencion admin assistant. Answer in the user's language. Be concise, "
-        "professional, and practical. When ## Context (semantic code search) is present, use "
-        "it; cite file paths. Do not invent secrets, live DB rows, or current production state.\n\n"
-        "You cannot run shell/SQL/HTTP against their environment yourself — only the pasted "
-        "snippets are authoritative. Still: answer the question from code and config first "
-        "(what to change, where it lives, how it works). If they need live state, give explicit "
-        "commands or checks for someone with server access to run; derive those from the codebase "
-        "when you can.\n\n"
-        "Do not open with a generic disclaimer about “no VM access” unless they explicitly ask "
-        "you to execute something on their infrastructure."
+        "Eres el asistente de administración de Prevención. Responde en el idioma del usuario. "
+        "Sé breve, profesional y práctico.\n\n"
+        "Cuando exista la sección «## Context (semantic code search)», úsala: enlaza rutas de "
+        "archivo y explica con ese código. No inventes secretos, ni datos de producción, ni "
+        "estado en vivo que no salga del mensaje ni del contexto pegado.\n\n"
+        "Prioridad: resolver la pregunta con rutas, configuración y lógica del repositorio. "
+        "Si hace falta comprobar algo en un servidor, propón comandos o pasos concretos que un "
+        "admin podría ejecutar (infórmalos a partir del código cuando sea posible).\n\n"
+        "Prohibición explícita: no empieces la respuesta con negativas tipo «no tengo acceso a la VM», "
+        "«no tengo acceso a SQL», «no puedo acceder a sistemas externos» ni variantes, salvo que "
+        "el usuario pregunte únicamente si tú ejecutas órdenes en su infraestructura: en ese caso "
+        "una sola frase breve (que tú no ejecutas nada en su servidor) y seguidamente la ayuda "
+        "práctica a su tarea."
     )
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system}]
     if body.messages:
@@ -174,7 +203,7 @@ async def legacy_chat(
     data = r.json()
     msg = (data.get("choices") or [{}])[0].get("message") or {}
     text = assistant_message_text(msg).strip() or "(vacío del modelo)"
-    return {"reply": text, "model": model, "mode": "legacy"}
+    return {"reply": text, "model": model, "mode": "legacy", "product": product}
 
 
 # --- codebase index ------------------------------------------------------------------

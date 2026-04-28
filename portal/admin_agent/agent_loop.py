@@ -327,3 +327,104 @@ async def stream_chat_turn(
     # Out of rounds without final answer
     yield _sse("error", {"message": f"max tool rounds reached ({rounds}); cutting turn"})
     yield _sse("done", {"finish_reason": "max_rounds", "rounds": rounds})
+
+
+def _consume_sse_chunks(buffer: str, chunk: str) -> tuple[str, List[tuple[str, Dict[str, Any]]]]:
+    buffer = (buffer + chunk).replace("\r\n", "\n").replace("\r", "\n")
+    events: List[tuple[str, Dict[str, Any]]] = []
+    while "\n\n" in buffer:
+        raw, buffer = buffer.split("\n\n", 1)
+        raw = raw.strip()
+        if not raw:
+            continue
+        ev_name = "message"
+        data_lines: List[str] = []
+        for line in raw.split("\n"):
+            if line.startswith("event:"):
+                ev_name = line[6:].strip()
+            elif line.startswith("data:"):
+                data_lines.append(line[5:].lstrip())
+        payload = "\n".join(data_lines)
+        try:
+            data_obj: Dict[str, Any] = json.loads(payload)
+        except json.JSONDecodeError:
+            data_obj = {"_unparsed": payload[:500]}
+        events.append((ev_name, data_obj))
+    return buffer, events
+
+
+async def collect_agent_turn(
+    *,
+    user_message: str,
+    tier: str,
+    session_id: Optional[str],
+    who: str,
+    openrouter_api_key: str,
+    model_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Ejecuta el mismo flujo que stream_chat_turn pero devuelve un solo dict (sin SSE HTTP)."""
+    buf = ""
+    meta: Dict[str, Any] = {}
+    content_parts: List[str] = []
+    tool_trace: List[Dict[str, Any]] = []
+    err: Optional[str] = None
+    done: Dict[str, Any] = {}
+
+    async for sse in stream_chat_turn(
+        user_message=user_message,
+        tier=tier,
+        session_id=session_id,
+        who=who,
+        openrouter_api_key=openrouter_api_key,
+        model_override=model_override,
+    ):
+        buf, evs = _consume_sse_chunks(buf, sse)
+        for ev_name, data in evs:
+            if ev_name == "session":
+                meta = {**meta, **data}
+            elif ev_name == "content":
+                content_parts.append(str(data.get("delta") or ""))
+            elif ev_name == "tool_call":
+                tool_trace.append(
+                    {
+                        "type": "call",
+                        "id": data.get("id"),
+                        "name": data.get("name"),
+                        "args_preview": data.get("args_preview"),
+                    }
+                )
+            elif ev_name == "tool_result":
+                tool_trace.append(
+                    {
+                        "type": "result",
+                        "id": data.get("id"),
+                        "name": data.get("name"),
+                        "ok": data.get("ok"),
+                        "preview": data.get("preview"),
+                    }
+                )
+            elif ev_name == "error":
+                err = str(data.get("message") or data)
+            elif ev_name == "done":
+                done = dict(data)
+
+    reply = "".join(content_parts).strip()
+    model = str(meta.get("model") or model_override or cfg.OPENROUTER_MODEL)
+    if not reply and err:
+        reply = err
+    if not reply:
+        reply = "(vacío del modelo)"
+
+    return {
+        "reply": reply.strip(),
+        "model": model,
+        "mode": "agent",
+        "session_id": meta.get("session_id"),
+        "tier": meta.get("tier"),
+        "tools_available": meta.get("tools"),
+        "max_rounds": meta.get("max_rounds"),
+        "tool_trace": tool_trace[:80],
+        "error": err,
+        "finish_reason": done.get("finish_reason"),
+        "rounds": done.get("rounds"),
+    }
