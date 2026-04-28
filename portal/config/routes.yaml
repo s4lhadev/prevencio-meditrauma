@@ -24,16 +24,6 @@ admin_asistente_chat_stream:
     controller: App\Controller\AdminAsistenteController::chatStream
     methods: POST
 
-admin_asistente_dev_unlock:
-    path: /agent/dev/unlock
-    controller: App\Controller\AdminAsistenteController::devUnlock
-    methods: POST
-
-admin_asistente_dev_logout:
-    path: /agent/dev/logout
-    controller: App\Controller\AdminAsistenteController::devLogout
-    methods: POST
-
 admin_asistente_index_status:
     path: /agent/index-status
     controller: App\Controller\AdminAsistenteController::indexStatus

@@ -3,8 +3,6 @@ parameters:
     env(ADMIN_AGENT_INTERNAL_URL): 'http://127.0.0.1:9102'
     env(ADMIN_AGENT_SECRET): ''
     env(ADMIN_AGENT_PAGE_KEY): ''
-    env(ADMIN_AGENT_DEV_KEY): ''
     admin_agent.internal_url: '%env(ADMIN_AGENT_INTERNAL_URL)%'
     admin_agent.secret: '%env(ADMIN_AGENT_SECRET)%'
     admin_agent.page_key: '%env(ADMIN_AGENT_PAGE_KEY)%'
-    admin_agent.dev_key: '%env(ADMIN_AGENT_DEV_KEY)%'

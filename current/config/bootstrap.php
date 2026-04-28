@@ -15,7 +15,7 @@ if (is_array($env = @include dirname(__DIR__).'/.env.local.php') && ($_SERVER['A
     // y provocan agent_unauthorized aunque .env esté correcto.
     $envFile = dirname(__DIR__).'/.env';
     if (is_readable($envFile)) {
-        $dynamicKeys = ['ADMIN_AGENT_INTERNAL_URL', 'ADMIN_AGENT_SECRET', 'ADMIN_AGENT_PAGE_KEY', 'ADMIN_AGENT_DEV_KEY', 'APP_CACHE_DIR'];
+        $dynamicKeys = ['ADMIN_AGENT_INTERNAL_URL', 'ADMIN_AGENT_SECRET', 'ADMIN_AGENT_PAGE_KEY', 'APP_CACHE_DIR'];
         $keysSet = array_flip($dynamicKeys);
         foreach (file($envFile, \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
             $trimmed = ltrim($line);
