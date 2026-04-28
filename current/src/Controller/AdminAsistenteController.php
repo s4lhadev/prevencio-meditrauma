@@ -7,6 +7,7 @@ use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -16,12 +17,15 @@ use Psr\Log\LoggerInterface;
 class AdminAsistenteController extends AbstractController
 {
     const SESSION_PAGE_UNLOCK = 'admin_asistente_page_unlocked';
+    const SESSION_DEV_UNLOCK = 'admin_asistente_dev_unlocked';
 
     /** Cookie con HMAC: funciona aunque falle el guardado de sesión (permisos var/sessions, proxy, etc.) */
     private const UNLOCK_COOKIE = 'admin_asistente_u';
+    private const DEV_UNLOCK_COOKIE = 'admin_asistente_du';
 
     /** Alineado con config/packages/framework.yaml session.cookie_lifetime */
     private const UNLOCK_COOKIE_LIFETIME = 18000;
+    private const DEV_UNLOCK_COOKIE_LIFETIME = 18000;
 
     /** Anti-CSRF del formulario /agent sin depender de sesión PHP (sesión a menudo no persiste GET→POST). */
     private const UNLOCK_CSRF_COOKIE = 'admin_asistente_csrf';
@@ -110,9 +114,14 @@ class AdminAsistenteController extends AbstractController
             $configured = true;
         }
 
+        $devKey = $this->adminAgentDevKey();
+        $devKeyConfigured = $devKey !== '' && $devKey !== 'change_me_dev_key';
+
         return $this->render('admin_asistente/index.html.twig', array(
             'assistant_configured' => $configured,
             'agent_ajax_token' => $this->agentAjaxToken(),
+            'dev_key_configured' => $devKeyConfigured,
+            'dev_unlocked' => $this->isDevUnlocked($request),
         ));
     }
 
@@ -166,11 +175,15 @@ class AdminAsistenteController extends AbstractController
         $secret = $this->adminAgentSecret();
         $configured = !($base === '' || $secret === '' || $secret === 'change_me_match_admin_agent_env');
 
+        $devKey = $this->adminAgentDevKey();
+        $devKeyConfigured = $devKey !== '' && $devKey !== 'change_me_dev_key';
         $response = $this->render('admin_asistente/index.html.twig', array(
             'assistant_configured' => $configured,
             'agent_replace_history' => true,
             'agent_unlock_notice' => 'Acceso al asistente activado.',
             'agent_ajax_token' => $this->agentAjaxToken(),
+            'dev_key_configured' => $devKeyConfigured,
+            'dev_unlocked' => $this->isDevUnlocked($request),
         ));
         $this->addUnlockCookie($response, $request, $pageKey);
         $this->clearUnlockCsrfCookie($response, $request);
@@ -519,5 +532,226 @@ class AdminAsistenteController extends AbstractController
             false,
             Cookie::SAMESITE_LAX
         ));
+    }
+
+    // -----------------------------------------------------------------------------
+    //  Dev tier: second password unlocks tools that can run shell, sql_execute, etc.
+    // -----------------------------------------------------------------------------
+
+    private function adminAgentDevKey(): string
+    {
+        try {
+            $fromContainer = trim((string) $this->getParameter('admin_agent.dev_key'));
+        } catch (\Throwable $e) {
+            $fromContainer = '';
+        }
+        if ($fromContainer !== '' && $fromContainer !== 'change_me_dev_key') {
+            return $fromContainer;
+        }
+        $envFile = $this->getParameter('kernel.project_dir').'/.env';
+        if (!is_readable($envFile)) {
+            return $fromContainer;
+        }
+        foreach (file($envFile, \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES) ?: array() as $line) {
+            $t = ltrim($line);
+            if ($t === '' || $t[0] === '#') {
+                continue;
+            }
+            if (preg_match('/^(?:export\\s+)?ADMIN_AGENT_DEV_KEY=(.*)$/', trim($line), $m)) {
+                $val = trim($m[1]);
+                if ($val !== '' && ($val[0] === '"' || $val[0] === "'")) {
+                    $val = trim($val, $val[0]);
+                }
+                return trim($val);
+            }
+        }
+        return $fromContainer;
+    }
+
+    private function devCookieHmac(string $devKey): string
+    {
+        $kernelSecret = (string) $this->getParameter('kernel.secret');
+
+        return hash_hmac('sha256', 'admin_asistente_dev_unlock_v1'."\n".$devKey, $kernelSecret);
+    }
+
+    private function isDevUnlocked(Request $request): bool
+    {
+        $devKey = $this->adminAgentDevKey();
+        if ($devKey === '' || $devKey === 'change_me_dev_key') {
+            return false;
+        }
+        if ((bool) $request->getSession()->get(self::SESSION_DEV_UNLOCK)) {
+            return true;
+        }
+        $expected = $this->devCookieHmac($devKey);
+        $fromCookie = (string) $request->cookies->get(self::DEV_UNLOCK_COOKIE, '');
+        if ($fromCookie === '' || !hash_equals($expected, $fromCookie)) {
+            return false;
+        }
+        $request->getSession()->set(self::SESSION_DEV_UNLOCK, true);
+
+        return true;
+    }
+
+    private function addDevUnlockCookie(Response $response, Request $request, string $devKey): void
+    {
+        $value = $this->devCookieHmac($devKey);
+        $secureFlag = $this->clientUsesTls($request);
+        $response->headers->setCookie(new Cookie(
+            self::DEV_UNLOCK_COOKIE,
+            $value,
+            time() + self::DEV_UNLOCK_COOKIE_LIFETIME,
+            '/',
+            null,
+            $secureFlag,
+            true,
+            false,
+            Cookie::SAMESITE_LAX
+        ));
+    }
+
+    private function clearDevUnlockCookie(Response $response, Request $request): void
+    {
+        $secureFlag = $this->clientUsesTls($request);
+        $response->headers->setCookie(new Cookie(
+            self::DEV_UNLOCK_COOKIE,
+            '',
+            1,
+            '/',
+            null,
+            $secureFlag,
+            true,
+            false,
+            Cookie::SAMESITE_LAX
+        ));
+    }
+
+    public function devUnlock(Request $request): JsonResponse
+    {
+        if (!$request->isMethod('POST')) {
+            return new JsonResponse(array('error' => 'method'), 405);
+        }
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden'), 403);
+        }
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data) || !isset($data['_token']) || !$this->isValidAgentAjaxToken((string) $data['_token'])) {
+            return new JsonResponse(array('error' => 'csrf'), 400);
+        }
+        $devKey = $this->adminAgentDevKey();
+        if ($devKey === '' || $devKey === 'change_me_dev_key') {
+            return new JsonResponse(array('error' => 'dev_key_not_configured', 'detail' => 'Define ADMIN_AGENT_DEV_KEY en .env.'), 503);
+        }
+        $submitted = isset($data['key']) ? trim((string) $data['key']) : '';
+        if ($submitted === '' || strlen($submitted) !== strlen($devKey) || !hash_equals($devKey, $submitted)) {
+            return new JsonResponse(array('error' => 'wrong_key'), 401);
+        }
+        $request->getSession()->set(self::SESSION_DEV_UNLOCK, true);
+        $resp = new JsonResponse(array('ok' => true, 'tier' => 'dev'));
+        $this->addDevUnlockCookie($resp, $request, $devKey);
+
+        return $resp;
+    }
+
+    public function devLogout(Request $request): JsonResponse
+    {
+        $request->getSession()->remove(self::SESSION_DEV_UNLOCK);
+        $resp = new JsonResponse(array('ok' => true, 'tier' => 'user'));
+        $this->clearDevUnlockCookie($resp, $request);
+
+        return $resp;
+    }
+
+    // -----------------------------------------------------------------------------
+    //  SSE proxy → uvicorn /v1/chat/stream
+    // -----------------------------------------------------------------------------
+
+    public function chatStream(Request $request): Response
+    {
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
+        }
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return new JsonResponse(array('error' => 'invalid_json'), 400);
+        }
+        if (!isset($data['_token']) || !$this->isValidAgentAjaxToken((string) $data['_token'])) {
+            return new JsonResponse(array('error' => 'csrf'), 400);
+        }
+        $message = isset($data['message']) ? trim((string) $data['message']) : '';
+        if ($message === '') {
+            return new JsonResponse(array('error' => 'empty_message'), 400);
+        }
+        $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
+        $internalSecret = $this->adminAgentSecret();
+        if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
+            return new JsonResponse(array('error' => 'agent_not_configured'), 503);
+        }
+        if (!function_exists('curl_init')) {
+            return new JsonResponse(array(
+                'error' => 'curl_extension_missing',
+                'detail' => 'Instala php-curl para usar /agent/chat/stream (apt install php-curl + reinicia php-fpm/Apache).',
+            ), 500);
+        }
+
+        $tier = $this->isDevUnlocked($request) ? 'dev' : 'user';
+        $who = (string) ($request->getSession()->get('_username') ?: ($request->getClientIp() ?: 'anon'));
+
+        $payload = array(
+            'message' => $message,
+            'session_id' => isset($data['session_id']) && $data['session_id'] ? (string) $data['session_id'] : null,
+            'create_session' => !isset($data['create_session']) || (bool) $data['create_session'],
+            'title' => isset($data['title']) && $data['title'] ? substr((string) $data['title'], 0, 200) : null,
+        );
+
+        $url = $base.'/v1/chat/stream';
+
+        $response = new StreamedResponse(function () use ($url, $internalSecret, $tier, $who, $payload) {
+            @ini_set('zlib.output_compression', '0');
+            @ini_set('output_buffering', '0');
+            @ini_set('implicit_flush', '1');
+            while (ob_get_level() > 0) {
+                @ob_end_flush();
+            }
+            $ch = curl_init($url);
+            curl_setopt_array($ch, array(
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode($payload),
+                CURLOPT_HTTPHEADER => array(
+                    'Content-Type: application/json',
+                    'Accept: text/event-stream',
+                    'X-Admin-Agent-Secret: '.$internalSecret,
+                    'X-Admin-Agent-Tier: '.$tier,
+                    'X-Admin-Agent-Who: '.substr($who, 0, 200),
+                ),
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_CONNECTTIMEOUT => 15,
+                CURLOPT_BUFFERSIZE => 256,
+                CURLOPT_TCP_NODELAY => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_RETURNTRANSFER => false,
+                CURLOPT_WRITEFUNCTION => function ($curl, $chunk) {
+                    echo $chunk;
+                    @flush();
+
+                    return strlen($chunk);
+                },
+            ));
+            $ok = curl_exec($ch);
+            if ($ok === false) {
+                $err = curl_error($ch) ?: 'curl error';
+                echo "event: error\n";
+                echo 'data: '.json_encode(array('message' => 'proxy: '.$err))."\n\n";
+                @flush();
+            }
+            curl_close($ch);
+        });
+        $response->headers->set('Content-Type', 'text/event-stream; charset=utf-8');
+        $response->headers->set('Cache-Control', 'no-cache, no-transform');
+        $response->headers->set('X-Accel-Buffering', 'no');
+        $response->headers->set('Connection', 'keep-alive');
+
+        return $response;
     }
 }

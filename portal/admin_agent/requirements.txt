@@ -3,5 +3,6 @@ uvicorn[standard]==0.32.1
 python-dotenv>=1.0.1
 httpx==0.28.1
 pydantic==2.10.3
-# 2.1+ suele publicar rueda manylinux para Python 3.13; 2.0.x obliga a compilar (meson + python3-dev)
+asyncpg>=0.30.0
+# 2.1+ ships manylinux wheels for Python 3.13; 2.0.x forces meson + python3-dev compile
 numpy>=2.1.0,<3

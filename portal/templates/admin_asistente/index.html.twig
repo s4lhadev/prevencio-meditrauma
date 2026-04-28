@@ -5,38 +5,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Asistente — Prevención</title>
     <style>
-        :root { --bg: #0f1419; --panel: #1a2332; --text: #e6edf3; --muted: #8b9cb3; --accent: #2bb673; --err: #f85149; }
+        :root {
+            --bg: #0f1419; --panel: #1a2332; --panel2: #11192b;
+            --text: #e6edf3; --muted: #8b9cb3; --accent: #2bb673; --warn: #d97a2b; --err: #f85149; --tool: #7ea7ff;
+            --border: #2a3a55;
+        }
         * { box-sizing: border-box; }
         body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-        .wrap { max-width: 720px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+        .wrap { max-width: 880px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
         h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.35rem; letter-spacing: -0.02em; }
-        p.sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.5rem; }
-        a.back { color: var(--accent); text-decoration: none; font-size: 0.875rem; }
+        p.sub { color: var(--muted); font-size: 0.875rem; margin: 0 0 1.25rem; }
+        a.back { color: var(--accent); text-decoration: none; font-size: 0.85rem; margin-right: 1rem; }
         a.back:hover { text-decoration: underline; }
-        .banner { background: rgba(248,81,73,0.12); border: 1px solid rgba(248,81,73,0.35); color: #ffb4b0; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.875rem; }
-        .log { background: var(--panel); border-radius: 10px; padding: 1rem; min-height: 220px; max-height: 45vh; overflow-y: auto; margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-        .log .u { color: #7ee2b8; }
-        .log .a { color: #a5d4ff; }
-        .row { display: flex; gap: 0.5rem; }
-        textarea { flex: 1; min-height: 48px; max-height: 160px; resize: vertical; padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid #303d50; background: #0d1117; color: var(--text); font-family: inherit; font-size: 0.95rem; }
-        button { padding: 0.65rem 1.1rem; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
-        button:disabled { opacity: 0.45; cursor: not-allowed; }
-        .meta { font-size: 0.75rem; color: var(--muted); margin-top: 1rem; }
-        .ix { background: var(--panel); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.88rem; }
-        .ix h2 { margin: 0 0 0.5rem; font-size: 1rem; }
-        .ix p { margin: 0.35rem 0; color: var(--muted); }
+        .topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.75rem; }
+        .badges { display: flex; gap: 0.4rem; align-items: center; }
+        .badge { padding: 0.18rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; border: 1px solid transparent; }
+        .badge.tier-user { background: rgba(126,167,255,0.12); color: #a5c3ff; border-color: rgba(126,167,255,0.3); }
+        .badge.tier-dev { background: rgba(217,122,43,0.12); color: #ffc28a; border-color: rgba(217,122,43,0.4); }
+        .badge.btn { cursor: pointer; }
+        .badge.btn:hover { filter: brightness(1.15); }
+        .banner { background: rgba(248,81,73,0.12); border: 1px solid rgba(248,81,73,0.35); color: #ffb4b0; padding: 0.7rem 0.95rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.85rem; }
+        .ix { background: var(--panel); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; }
+        .ix h2 { margin: 0 0 0.3rem; font-size: 0.95rem; }
+        .ix p { margin: 0.2rem 0; color: var(--muted); }
         .ix code { color: #7ee2b8; }
-        .ix .btns { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
-        .ix button.secondary { background: #303d50; }
-        .ix button.danger { background: #5a1e1e; }
+        .ix .btns { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+        button { padding: 0.55rem 0.9rem; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; font-size: 0.85rem; }
+        button.secondary { background: #303d50; }
+        button.danger { background: #5a1e1e; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .log { background: var(--panel); border-radius: 10px; padding: 1rem; min-height: 320px; max-height: 60vh; overflow-y: auto; margin-bottom: 1rem; font-size: 0.92rem; line-height: 1.5; }
+        .turn { margin-bottom: 0.85rem; }
+        .turn .role { font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; opacity: 0.7; }
+        .turn.user .role { color: #7ee2b8; }
+        .turn.assistant .role { color: #a5d4ff; }
+        .turn .body { white-space: pre-wrap; word-break: break-word; }
+        .tool {
+            background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+            padding: 0.5rem 0.75rem; margin: 0.4rem 0;
+            font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.78rem;
+        }
+        .tool .head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .tool .name { color: var(--tool); font-weight: 700; }
+        .tool .status.ok { color: var(--accent); }
+        .tool .status.err { color: var(--err); }
+        .tool .args, .tool .res { margin-top: 0.4rem; padding: 0.4rem 0.5rem; background: #0a1020; border-radius: 5px; max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+        .tool details summary { cursor: pointer; color: var(--muted); font-size: 0.74rem; }
+
+        .row { display: flex; gap: 0.5rem; }
+        textarea { flex: 1; min-height: 56px; max-height: 200px; resize: vertical; padding: 0.7rem 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: #0d1117; color: var(--text); font-family: inherit; font-size: 0.95rem; }
+        .meta { font-size: 0.72rem; color: var(--muted); margin-top: 0.75rem; }
+        .meta .session-id { font-family: ui-monospace, monospace; }
+
+        dialog.unlock { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; max-width: 380px; }
+        dialog.unlock::backdrop { background: rgba(0,0,0,0.55); }
+        dialog.unlock h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+        dialog.unlock p { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.85rem; }
+        dialog.unlock input { width: 100%; padding: 0.55rem 0.7rem; border-radius: 6px; border: 1px solid var(--border); background: #0d1117; color: var(--text); font-family: ui-monospace, monospace; }
+        dialog.unlock .actions { display: flex; gap: 0.4rem; margin-top: 0.85rem; justify-content: flex-end; }
+        dialog.unlock .err-line { color: var(--err); font-size: 0.8rem; margin-top: 0.5rem; min-height: 1.2em; }
     </style>
 </head>
 <body>
 <div class="wrap">
-    <a class="back" href="/admin/">← Volver al admin</a>
-    <a class="back" href="{{ path('admin_asistente_logout') }}">Cerrar sesión del asistente</a>
+    <div class="topbar">
+        <div>
+            <a class="back" href="/admin/">← Volver al admin</a>
+            <a class="back" href="{{ path('admin_asistente_logout') }}">Cerrar sesión del asistente</a>
+        </div>
+        <div class="badges">
+            <span id="tierBadge" class="badge {{ dev_unlocked ? 'tier-dev' : 'tier-user' }}">{{ dev_unlocked ? 'DEV' : 'USER' }}</span>
+            {% if dev_key_configured %}
+                {% if dev_unlocked %}
+                    <span id="devToggleBtn" class="badge btn" style="background:#2a3a55;color:#cfd8e3;border-color:#3a4d70;">Salir de dev</span>
+                {% else %}
+                    <span id="devToggleBtn" class="badge btn" style="background:#3a3320;color:#ffc28a;border-color:#5a4a25;">Modo dev…</span>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
     <h1>Asistente (Prevención)</h1>
-    <p class="sub">Uso interno. Tráfico al servicio <code>admin_agent</code> (puerto 9102) y a OpenRouter.</p>
+    <p class="sub">Bucle agentic con tools. <strong>USER</strong>: code_search, sql_schema, web. <strong>DEV</strong>: además sql_execute (solo SELECT), run_shell, http_request, read_log, symfony_console.</p>
 
     {% if agent_unlock_notice is defined and agent_unlock_notice %}
         <div class="banner" style="background: rgba(43,182,115,0.12); border-color: rgba(43,182,115,0.45); color: #7ee2b8;">{{ agent_unlock_notice }}</div>
@@ -50,13 +101,12 @@
 
     {% if not assistant_configured %}
         <div class="banner">
-            Configura <code>ADMIN_AGENT_INTERNAL_URL</code> y <code>ADMIN_AGENT_SECRET</code> en <code>.env</code> y arranca uvicorn. Ver <code>admin_agent/README.md</code>.
+            Configura <code>ADMIN_AGENT_INTERNAL_URL</code> y <code>ADMIN_AGENT_SECRET</code> en <code>.env</code> y arranca uvicorn.
         </div>
     {% endif %}
 
     <div class="ix" id="ixpanel">
         <h2>Índice del código (RAG)</h2>
-        <p>Incremental: solo reindexa archivos nuevos o modificados (por hash). «Completo» vacía y rehace todo.</p>
         <p id="ixstat">Cargando estado…</p>
         <div class="btns">
             <button type="button" class="secondary" id="ixrefresh" {% if not assistant_configured %}disabled{% endif %}>Refrescar estado</button>
@@ -67,20 +117,43 @@
 
     <div class="log" id="log" aria-live="polite"></div>
     <div class="row">
-        <textarea id="input" placeholder="Escribe tu pregunta…" rows="2"></textarea>
+        <textarea id="input" placeholder="Pregunta lo que quieras (Shift+Enter = nueva línea)…" rows="2"></textarea>
         <button type="button" id="send">Enviar</button>
+        <button type="button" class="secondary" id="stopBtn" style="display:none;">Detener</button>
     </div>
-    <p class="meta">Incluye índice de código (si existe) y OpenRouter.</p>
+    <p class="meta">Sesión <span class="session-id" id="sessionIdLabel">(nueva al primer mensaje)</span></p>
 </div>
+
+<dialog class="unlock" id="devDialog">
+    <h3>Activar modo dev</h3>
+    <p>Habilita las tools <code>sql_execute</code>, <code>run_shell</code>, <code>http_request</code>, <code>read_log</code>, <code>symfony_console</code>. Audited.</p>
+    <input type="password" id="devKeyInput" placeholder="ADMIN_AGENT_DEV_KEY" autocomplete="off">
+    <div class="err-line" id="devErr"></div>
+    <div class="actions">
+        <button type="button" class="secondary" id="devCancel">Cancelar</button>
+        <button type="button" id="devSubmit">Activar</button>
+    </div>
+</dialog>
+
 <script>
 (function () {
     var token = {{ agent_ajax_token|json_encode|raw }};
+    var cfg = {{ assistant_configured|json_encode|raw }};
+    var devKeyConfigured = {{ dev_key_configured|json_encode|raw }};
+    var devUnlocked = {{ dev_unlocked|json_encode|raw }};
+
     var log = document.getElementById('log');
     var input = document.getElementById('input');
-    var send = document.getElementById('send');
-    var history = [];
-    var cfg = {{ assistant_configured|json_encode|raw }};
+    var sendBtn = document.getElementById('send');
+    var stopBtn = document.getElementById('stopBtn');
+    var sessionIdLabel = document.getElementById('sessionIdLabel');
+    var tierBadge = document.getElementById('tierBadge');
+    var devToggleBtn = document.getElementById('devToggleBtn');
 
+    var sessionId = null;
+    var currentAbort = null;
+
+    // ---------- index status (unchanged) ----------
     function ixText(j) {
         if (!j || j.error) return 'Estado: ' + (j && (j.error || j.detail) ? JSON.stringify(j) : 'error');
         return 'Código raíz: <code>' + (j.codebase_root || '—') + '</code> · Ficheros: ' + (j.file_count || 0) + ' · Chunks: ' + (j.chunk_count || 0) + (j.last_reindex_utc ? ' · Última: ' + j.last_reindex_utc : '');
@@ -99,8 +172,7 @@
         var el = document.getElementById('ixstat');
         el.textContent = 'Indexando…';
         fetch('{{ path('admin_asistente_reindex') }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ _token: token, full: !!full })
         }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (o) {
@@ -116,45 +188,229 @@
     document.getElementById('ixfull').addEventListener('click', function () { doReindex(true); });
     loadIx();
 
-    function append(role, text) {
-        var line = document.createElement('div');
-        line.className = role === 'user' ? 'u' : 'a';
-        line.textContent = (role === 'user' ? 'Tú: ' : 'Asistente: ') + text;
-        log.appendChild(line);
+    // ---------- dev unlock ----------
+    var devDialog = document.getElementById('devDialog');
+    var devKeyInput = document.getElementById('devKeyInput');
+    var devErr = document.getElementById('devErr');
+
+    function setTier(isDev) {
+        devUnlocked = !!isDev;
+        tierBadge.textContent = isDev ? 'DEV' : 'USER';
+        tierBadge.className = 'badge ' + (isDev ? 'tier-dev' : 'tier-user');
+        if (devToggleBtn) {
+            devToggleBtn.textContent = isDev ? 'Salir de dev' : 'Modo dev…';
+            devToggleBtn.style.background = isDev ? '#2a3a55' : '#3a3320';
+            devToggleBtn.style.color = isDev ? '#cfd8e3' : '#ffc28a';
+            devToggleBtn.style.borderColor = isDev ? '#3a4d70' : '#5a4a25';
+        }
+    }
+    function openDevDialog() {
+        devErr.textContent = '';
+        devKeyInput.value = '';
+        if (typeof devDialog.showModal === 'function') {
+            devDialog.showModal();
+            setTimeout(function () { devKeyInput.focus(); }, 50);
+        } else {
+            // very old browser fallback
+            var k = window.prompt('Clave dev:');
+            if (k) submitDevKey(k);
+        }
+    }
+    function closeDevDialog() {
+        if (devDialog.open) devDialog.close();
+    }
+    function submitDevKey(key) {
+        if (!key) return;
+        fetch('{{ path('admin_asistente_dev_unlock') }}', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ _token: token, key: key })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (o) {
+            if (!o.ok) { devErr.textContent = (o.j.detail || o.j.error || 'error'); return; }
+            setTier(true);
+            closeDevDialog();
+            appendNote('Modo dev activado. Tools dev disponibles.');
+          }).catch(function (e) { devErr.textContent = 'Error de red: ' + e; });
+    }
+    function devLogout() {
+        fetch('{{ path('admin_asistente_dev_logout') }}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(function () { setTier(false); appendNote('Modo dev desactivado.'); });
+    }
+    if (devToggleBtn) {
+        devToggleBtn.addEventListener('click', function () {
+            if (devUnlocked) devLogout(); else openDevDialog();
+        });
+    }
+    document.getElementById('devCancel').addEventListener('click', closeDevDialog);
+    document.getElementById('devSubmit').addEventListener('click', function () { submitDevKey(devKeyInput.value); });
+    devKeyInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); submitDevKey(devKeyInput.value); }
+        if (e.key === 'Escape') closeDevDialog();
+    });
+
+    // ---------- chat rendering ----------
+    function el(tag, cls, text) {
+        var n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text != null) n.textContent = text;
+        return n;
+    }
+    function appendUserTurn(text) {
+        var t = el('div', 'turn user');
+        t.appendChild(el('div', 'role', 'Tú'));
+        t.appendChild(el('div', 'body', text));
+        log.appendChild(t);
+        log.scrollTop = log.scrollHeight;
+    }
+    function startAssistantTurn() {
+        var t = el('div', 'turn assistant');
+        t.appendChild(el('div', 'role', 'Asistente'));
+        var body = el('div', 'body', '');
+        t.appendChild(body);
+        log.appendChild(t);
+        log.scrollTop = log.scrollHeight;
+        return { turn: t, body: body };
+    }
+    function appendNote(text) {
+        var n = el('div', 'meta', text);
+        n.style.margin = '0.4rem 0';
+        log.appendChild(n);
+        log.scrollTop = log.scrollHeight;
+    }
+    function appendTool(name, argsPreview) {
+        var box = el('div', 'tool');
+        var head = el('div', 'head');
+        head.appendChild(el('span', 'name', name + '(...)'));
+        var status = el('span', 'status', '⏳ ejecutando…');
+        head.appendChild(status);
+        box.appendChild(head);
+        var det = document.createElement('details');
+        var sum = document.createElement('summary');
+        sum.textContent = 'argumentos';
+        det.appendChild(sum);
+        var args = el('pre', 'args', argsPreview || '{}');
+        det.appendChild(args);
+        box.appendChild(det);
+        log.appendChild(box);
+        log.scrollTop = log.scrollHeight;
+        return { box: box, status: status };
+    }
+    function fillToolResult(handle, ok, previewObj) {
+        if (!handle) return;
+        handle.status.textContent = ok ? '✓ ok' : '✗ error';
+        handle.status.className = 'status ' + (ok ? 'ok' : 'err');
+        var det = document.createElement('details');
+        var sum = document.createElement('summary');
+        sum.textContent = 'resultado';
+        det.appendChild(sum);
+        var pre = el('pre', 'res');
+        try { pre.textContent = JSON.stringify(previewObj, null, 2); }
+        catch (e) { pre.textContent = String(previewObj); }
+        det.appendChild(pre);
+        handle.box.appendChild(det);
         log.scrollTop = log.scrollHeight;
     }
 
-    function run() {
-        var text = (input.value || '').trim();
-        if (!text) return;
-        send.disabled = true;
-        append('user', text);
-        var prior = history.map(function (m) { return { role: m.role, content: m.content }; });
-        input.value = '';
+    // ---------- SSE consumer ----------
+    function parseSseLine(buf) {
+        // Returns array of { event, data } and remaining buffer
+        var events = [];
+        var idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+            var raw = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            var event = 'message', data = '';
+            raw.split('\n').forEach(function (line) {
+                if (line.indexOf('event:') === 0) event = line.slice(6).trim();
+                else if (line.indexOf('data:') === 0) data += (data ? '\n' : '') + line.slice(5).trim();
+            });
+            events.push({ event: event, data: data });
+        }
+        return { events: events, buf: buf };
+    }
+    function streamChat(text) {
+        var assistant = startAssistantTurn();
+        var toolHandles = {}; // tool_call id → handle
+        var ctrl = new AbortController();
+        currentAbort = ctrl;
+        sendBtn.disabled = true;
+        stopBtn.style.display = '';
 
-        fetch('{{ path('admin_asistente_chat') }}', {
+        var body = JSON.stringify({
+            _token: token,
+            message: text,
+            session_id: sessionId,
+            create_session: true
+        });
+
+        fetch('{{ path('admin_asistente_chat_stream') }}', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ _token: token, message: text, messages: prior, use_codebase: true })
-        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (o) {
-            if (!o.ok) {
-                append('assistant', 'Error: ' + (o.j.error || o.j.detail || JSON.stringify(o.j)));
-                return;
+            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            body: body,
+            signal: ctrl.signal
+        }).then(function (r) {
+            if (!r.ok || !r.body) {
+                return r.text().then(function (txt) { throw new Error(r.status + ' ' + (txt || '')); });
             }
-            var reply = o.j.reply || '';
-            append('assistant', reply);
-            history.push({ role: 'user', content: text });
-            history.push({ role: 'assistant', content: reply });
+            var reader = r.body.getReader();
+            var decoder = new TextDecoder('utf-8');
+            var buf = '';
+            function pump() {
+                return reader.read().then(function (chunk) {
+                    if (chunk.done) return;
+                    buf += decoder.decode(chunk.value, { stream: true });
+                    var parsed = parseSseLine(buf);
+                    buf = parsed.buf;
+                    parsed.events.forEach(function (ev) {
+                        var data = {};
+                        try { data = JSON.parse(ev.data); } catch (e) { return; }
+                        if (ev.event === 'session') {
+                            if (data.session_id) {
+                                sessionId = data.session_id;
+                                sessionIdLabel.textContent = sessionId.slice(0, 8) + '…' + sessionId.slice(-4);
+                            }
+                            if (Array.isArray(data.tools)) {
+                                appendNote('Tools: ' + data.tools.join(', ') + ' · modelo: ' + (data.model || '?') + ' · max rounds: ' + (data.max_rounds || '?'));
+                            }
+                        } else if (ev.event === 'content') {
+                            assistant.body.textContent += (data.delta || '');
+                            log.scrollTop = log.scrollHeight;
+                        } else if (ev.event === 'tool_call') {
+                            toolHandles[data.id] = appendTool(data.name, data.args_preview);
+                        } else if (ev.event === 'tool_result') {
+                            fillToolResult(toolHandles[data.id], data.ok, data.preview);
+                        } else if (ev.event === 'error') {
+                            appendNote('⚠ ' + (data.message || 'error'));
+                        } else if (ev.event === 'done') {
+                            // finished
+                        }
+                    });
+                    return pump();
+                });
+            }
+            return pump();
         }).catch(function (e) {
-            append('assistant', 'Error de red: ' + e);
+            if (e && e.name === 'AbortError') {
+                appendNote('Detenido por el usuario.');
+            } else {
+                appendNote('Error: ' + (e && e.message ? e.message : e));
+            }
         }).then(function () {
-            send.disabled = false;
+            sendBtn.disabled = false;
+            stopBtn.style.display = 'none';
+            currentAbort = null;
             input.focus();
         });
     }
-
-    send.addEventListener('click', run);
+    function run() {
+        var text = (input.value || '').trim();
+        if (!text) return;
+        appendUserTurn(text);
+        input.value = '';
+        streamChat(text);
+    }
+    sendBtn.addEventListener('click', run);
+    stopBtn.addEventListener('click', function () { if (currentAbort) currentAbort.abort(); });
     input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); }
     });

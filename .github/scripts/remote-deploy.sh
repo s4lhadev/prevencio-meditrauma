@@ -182,6 +182,42 @@ git reset --hard "origin/${BRANCH}"
 if [ -f "$TOP/.github/scripts/infisical-admin-agent-env.sh" ]; then
   bash "$TOP/.github/scripts/infisical-admin-agent-env.sh" "$TOP" || exit 1
 fi
+
+# Migraciones del agente (schema agent.* + role agent_ro). Idempotentes; safe para re-aplicar.
+# Necesita psql en PATH y AGENT_DB_ADMIN_DSN apuntando a un usuario con CREATE en la BD.
+# AGENT_DB_ADMIN_DSN puede venir de Infisical o del .env del admin_agent. No es ADMIN_AGENT_SECRET.
+_apply_agent_migrations() {
+  local mig_dir="$TOP/portal/admin_agent/migrations"
+  [ -d "$mig_dir" ] || mig_dir="$TOP/admin_agent/migrations"
+  [ -d "$mig_dir" ] || return 0
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "Aviso: psql no está en PATH; omito migraciones agent.* (apt install -y postgresql-client)." >&2
+    return 0
+  fi
+  local dsn="${AGENT_DB_ADMIN_DSN:-}"
+  if [ -z "$dsn" ]; then
+    local agent_env="$TOP/portal/admin_agent/.env"
+    [ -f "$agent_env" ] || agent_env="$TOP/admin_agent/.env"
+    if [ -f "$agent_env" ]; then
+      dsn=$(grep -m1 '^[[:space:]]*AGENT_DB_ADMIN_DSN=' "$agent_env" | cut -d= -f2- | tr -d '\r' | sed "s/^['\"]//;s/['\"]$//")
+    fi
+  fi
+  if [ -z "$dsn" ]; then
+    echo "Aviso: AGENT_DB_ADMIN_DSN no definido; omito migraciones agent.* (define la DSN del usuario admin de Postgres en Infisical/agent .env)." >&2
+    return 0
+  fi
+  local f
+  for f in "$mig_dir"/*.sql; do
+    [ -f "$f" ] || continue
+    echo "Aplicando migración $(basename "$f")…" >&2
+    if ! PGPASSWORD="" psql "$dsn" -v ON_ERROR_STOP=1 -X -q -f "$f" >&2; then
+      echo "ERROR: psql falló aplicando $(basename "$f"). Revisa AGENT_DB_ADMIN_DSN." >&2
+      return 1
+    fi
+  done
+  echo "OK: migraciones agent.* aplicadas." >&2
+}
+_apply_agent_migrations || exit 1
 # .env.local.php (composer dump-env) puede tener un ADMIN_AGENT_SECRET viejo y pisar el nuevo de .env
 # (bootstrap.php carga .env.local.php y no relee .env). Borrarlo aquí evita 401 entre PHP y uvicorn.
 # bootstrap.php cae en Dotenv y carga .env tranquilamente; no hace falta regenerar el dump.
