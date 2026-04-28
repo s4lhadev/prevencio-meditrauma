@@ -67,12 +67,12 @@
             <a class="back" href="{{ path('admin_asistente_logout') }}">Cerrar sesión del asistente</a>
         </div>
         <div class="badges">
-            <span class="badge tier-dev">TOOLS</span>
+            <span class="badge tier-user">RAG</span>
         </div>
     </div>
 
     <h1>Asistente (Prevención)</h1>
-    <p class="sub">Bucle agentic: code_search, sql_schema/sql_execute (solo lectura vía <code>agent_ro</code>), web, shell, HTTP interno allowlist, logs, Symfony console allowlist. Uso auditado.</p>
+    <p class="sub">Una respuesta por mensaje. Contexto del repositorio vía búsqueda semántica (RAG) cuando está indexado; sin herramientas en tiempo real.</p>
 
     {% if agent_unlock_notice is defined and agent_unlock_notice %}
         <div class="banner" style="background: rgba(43,182,115,0.12); border-color: rgba(43,182,115,0.45); color: #7ee2b8;">{{ agent_unlock_notice }}</div>
@@ -104,9 +104,8 @@
     <div class="row">
         <textarea id="input" placeholder="Pregunta lo que quieras (Shift+Enter = nueva línea)…" rows="2"></textarea>
         <button type="button" id="send">Enviar</button>
-        <button type="button" class="secondary" id="stopBtn" style="display:none;">Detener</button>
     </div>
-    <p class="meta">Sesión <span class="session-id" id="sessionIdLabel">(nueva al primer mensaje)</span></p>
+    <p class="meta">Se reutilizan los últimos turnos de esta pestaña como historial (máx. ~24 en el agente).</p>
 </div>
 
 <script>
@@ -117,11 +116,7 @@
     var log = document.getElementById('log');
     var input = document.getElementById('input');
     var sendBtn = document.getElementById('send');
-    var stopBtn = document.getElementById('stopBtn');
-    var sessionIdLabel = document.getElementById('sessionIdLabel');
-
-    var sessionId = null;
-    var currentAbort = null;
+    var transcript = [];
 
     // ---------- index status (unchanged) ----------
     function ixText(j) {
@@ -187,173 +182,40 @@
         log.appendChild(n);
         log.scrollTop = log.scrollHeight;
     }
-    function appendTool(name, argsPreview) {
-        var box = el('div', 'tool');
-        var head = el('div', 'head');
-        head.appendChild(el('span', 'name', name + '(...)'));
-        var status = el('span', 'status', '⏳ ejecutando…');
-        head.appendChild(status);
-        box.appendChild(head);
-        var det = document.createElement('details');
-        var sum = document.createElement('summary');
-        sum.textContent = 'argumentos';
-        det.appendChild(sum);
-        var args = el('pre', 'args', argsPreview || '{}');
-        det.appendChild(args);
-        box.appendChild(det);
-        log.appendChild(box);
-        log.scrollTop = log.scrollHeight;
-        return { box: box, status: status };
-    }
-    function fillToolResult(handle, ok, previewObj) {
-        if (!handle) return;
-        handle.status.textContent = ok ? '✓ ok' : '✗ error';
-        handle.status.className = 'status ' + (ok ? 'ok' : 'err');
-        var det = document.createElement('details');
-        var sum = document.createElement('summary');
-        sum.textContent = 'resultado';
-        det.appendChild(sum);
-        var pre = el('pre', 'res');
-        try { pre.textContent = JSON.stringify(previewObj, null, 2); }
-        catch (e) { pre.textContent = String(previewObj); }
-        det.appendChild(pre);
-        handle.box.appendChild(det);
-        log.scrollTop = log.scrollHeight;
-    }
 
-    // ---------- SSE consumer ----------
-    function parseSseLine(buf) {
-        // CRLF-safe: proxies/Apache pueden enviar \r\n; el delimitador SSE debe detectarse igual.
-        buf = buf.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        var events = [];
-        var idx;
-        while ((idx = buf.indexOf('\n\n')) >= 0) {
-            var raw = buf.slice(0, idx);
-            buf = buf.slice(idx + 2);
-            var event = 'message', data = '';
-            raw.split('\n').forEach(function (line) {
-                if (line.indexOf('event:') === 0) event = line.slice(6).trim();
-                else if (line.indexOf('data:') === 0) data += (data ? '\n' : '') + line.slice(5).trim();
-            });
-            events.push({ event: event, data: data });
+    function sendJsonChat(text) {
+        if (!cfg) return;
+        var assistant = startAssistantTurn();
+        assistant.body.textContent = '…';
+        sendBtn.disabled = true;
+        var payload = { _token: token, message: text, use_codebase: true };
+        if (transcript.length) {
+            payload.messages = transcript;
         }
-        return { events: events, buf: buf };
-    }
-    /** Si el SSE termina sin texto (p. ej. modelo vacío o buffer Apache), misma pregunta vía JSON /v1/chat — sin tools pero usable. */
-    function fallbackJsonChat(msgText, assistantTurn) {
-        if (!cfg) return Promise.resolve();
-        return fetch('{{ path('admin_asistente_chat') }}', {
+        fetch('{{ path('admin_asistente_chat') }}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ _token: token, message: msgText, use_codebase: true })
+            body: JSON.stringify(payload)
         }).then(function (r) {
             return r.json().then(function (j) { return { ok: r.ok, j: j }; });
         }).then(function (o) {
             if (o.ok && o.j && typeof o.j.reply === 'string') {
-                assistantTurn.body.textContent = o.j.reply;
+                assistant.body.textContent = o.j.reply;
+                transcript.push({ role: 'user', content: text });
+                transcript.push({ role: 'assistant', content: o.j.reply });
+                if (transcript.length > 48) {
+                    transcript = transcript.slice(-48);
+                }
                 log.scrollTop = log.scrollHeight;
                 return;
             }
-            appendNote('⚠ Respuesta directa falló: ' + JSON.stringify(o.j || {}).slice(0, 400));
+            assistant.body.textContent = '';
+            appendNote('Error: ' + JSON.stringify(o.j || {}).slice(0, 400));
         }).catch(function (e) {
-            appendNote('⚠ ' + (e && e.message ? e.message : e));
-        });
-    }
-    function streamChat(text) {
-        var assistant = startAssistantTurn();
-        var toolHandles = {}; // tool_call id → handle
-        var ctrl = new AbortController();
-        currentAbort = ctrl;
-        sendBtn.disabled = true;
-        stopBtn.style.display = '';
-
-        var body = JSON.stringify({
-            _token: token,
-            message: text,
-            session_id: sessionId,
-            create_session: true
-        });
-
-        fetch('{{ path('admin_asistente_chat_stream') }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-            body: body,
-            signal: ctrl.signal
-        }).then(function (r) {
-            if (!r.ok || !r.body) {
-                return r.text().then(function (txt) { throw new Error(r.status + ' ' + (txt || '')); });
-            }
-            var reader = r.body.getReader();
-            var decoder = new TextDecoder('utf-8');
-            var buf = '';
-            var streamHadError = false;
-            function handleSseEvents(events) {
-                events.forEach(function (ev) {
-                    var data = {};
-                    try { data = JSON.parse(ev.data); } catch (e) {
-                        appendNote('(SSE data no JSON: ' + String(ev.data).slice(0, 120) + '…)');
-                        return;
-                    }
-                    if (ev.event === 'session') {
-                        if (data.session_id) {
-                            sessionId = data.session_id;
-                            sessionIdLabel.textContent = sessionId.slice(0, 8) + '…' + sessionId.slice(-4);
-                        }
-                        if (Array.isArray(data.tools)) {
-                            appendNote('Tools: ' + data.tools.join(', ') + ' · modelo: ' + (data.model || '?') + ' · max rounds: ' + (data.max_rounds || '?'));
-                        }
-                    } else if (ev.event === 'content') {
-                        assistant.body.textContent += (data.delta || '');
-                        log.scrollTop = log.scrollHeight;
-                    } else if (ev.event === 'tool_call') {
-                        toolHandles[data.id] = appendTool(data.name, data.args_preview);
-                    } else if (ev.event === 'tool_result') {
-                        fillToolResult(toolHandles[data.id], data.ok, data.preview);
-                    } else if (ev.event === 'error') {
-                        streamHadError = true;
-                        appendNote('⚠ ' + (data.message || 'error'));
-                    } else if (ev.event === 'done') {
-                        // finished
-                    }
-                });
-            }
-            function pump() {
-                return reader.read().then(function (chunk) {
-                    if (chunk.done) {
-                        buf += decoder.decode(new Uint8Array(), { stream: false });
-                        var parsed = parseSseLine(buf);
-                        handleSseEvents(parsed.events);
-                        var rest = (parsed.buf || '').trim();
-                        if (rest !== '') {
-                            appendNote('(Buffer final no reconocido como SSE: ' + rest.slice(0, 200) + (rest.length > 200 ? '…' : '') + ')');
-                        }
-                        var out = (assistant.body.textContent || '').trim();
-                        if (!streamHadError && out === '') {
-                            if (cfg) {
-                                return fallbackJsonChat(text, assistant);
-                            }
-                            appendNote('Streaming vacío: activa el asistente en .env y revisa journalctl del agente.');
-                        }
-                        return Promise.resolve();
-                    }
-                    buf += decoder.decode(chunk.value, { stream: true });
-                    var parsed = parseSseLine(buf);
-                    buf = parsed.buf;
-                    handleSseEvents(parsed.events);
-                    return pump();
-                });
-            }
-            return pump();
-        }).catch(function (e) {
-            if (e && e.name === 'AbortError') {
-                appendNote('Detenido por el usuario.');
-            } else {
-                appendNote('Error: ' + (e && e.message ? e.message : e));
-            }
+            assistant.body.textContent = '';
+            appendNote('Error: ' + (e && e.message ? e.message : e));
         }).then(function () {
             sendBtn.disabled = false;
-            stopBtn.style.display = 'none';
-            currentAbort = null;
             input.focus();
         });
     }
@@ -362,10 +224,9 @@
         if (!text) return;
         appendUserTurn(text);
         input.value = '';
-        streamChat(text);
+        sendJsonChat(text);
     }
     sendBtn.addEventListener('click', run);
-    stopBtn.addEventListener('click', function () { if (currentAbort) currentAbort.abort(); });
     input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); }
     });

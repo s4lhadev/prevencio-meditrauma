@@ -19,11 +19,6 @@ admin_asistente_chat:
     controller: App\Controller\AdminAsistenteController::chat
     methods: POST
 
-admin_asistente_chat_stream:
-    path: /agent/chat/stream
-    controller: App\Controller\AdminAsistenteController::chatStream
-    methods: POST
-
 admin_asistente_index_status:
     path: /agent/index-status
     controller: App\Controller\AdminAsistenteController::indexStatus

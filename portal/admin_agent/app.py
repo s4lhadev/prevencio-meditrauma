@@ -2,8 +2,7 @@
 
 Endpoints:
   GET   /health                       — quick check + secret fingerprint
-  POST  /v1/chat/stream               — agentic SSE turn (tier-based tools)
-  POST  /v1/chat                      — legacy non-streaming (no tools, kept for backwards compat)
+  POST  /v1/chat                     — chat + optional codebase RAG (primary UI)
   GET   /v1/index/status              — codebase index status
   POST  /v1/reindex                   — reindex codebase
   GET   /v1/sessions                  — list recent sessions
@@ -13,7 +12,7 @@ Endpoints:
   PUT   /v1/operator-config           — update operator config (with optimistic version)
 
 Auth: every protected endpoint requires header X-Admin-Agent-Secret matching env.
-The "tier" is provided by the proxy via X-Admin-Agent-Tier (user|dev). Default 'user'.
+Optional tiers on session/operator endpoints via X-Admin-Agent-Tier (user|dev).
 """
 from __future__ import annotations
 
@@ -25,13 +24,12 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 import httpx
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 import config as cfg
 import operator_config as opcfg
 import session_store
-from agent_loop import assistant_message_text, stream_chat_turn
+from agent_loop import assistant_message_text
 from codebase_index import get_index
 
 logging.basicConfig(level=logging.INFO)
@@ -82,13 +80,6 @@ def _openrouter_key() -> str:
 
 
 # --- pydantic models -----------------------------------------------------------------
-class StreamChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=50000)
-    session_id: Optional[str] = None
-    create_session: bool = True
-    title: Optional[str] = None
-
-
 class SessionCreateRequest(BaseModel):
     title: Optional[str] = None
 
@@ -102,7 +93,7 @@ class OperatorConfigUpdateBody(BaseModel):
     updated_by: Optional[str] = "operator"
 
 
-# --- legacy /v1/chat (no tools, kept for back-compat with old UI) --------------------
+# --- /v1/chat: RAG one-shot, no tools -------------------------------------------------
 class LegacyChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=50000)
     messages: Optional[List[Dict[str, Any]]] = None
@@ -127,51 +118,24 @@ def health() -> Dict[str, Any]:
     }
 
 
-@app.post("/v1/chat/stream")
-async def chat_stream(
-    body: StreamChatRequest,
-    x_admin_agent_secret: Optional[str] = Header(default=None, alias="X-Admin-Agent-Secret"),
-    x_admin_agent_tier: Optional[str] = Header(default="user", alias="X-Admin-Agent-Tier"),
-    x_admin_agent_who: Optional[str] = Header(default="anon", alias="X-Admin-Agent-Who"),
-):
-    _require_secret(x_admin_agent_secret)
-    api_key = _openrouter_key()
-    tier = _resolve_tier(x_admin_agent_tier)
-    who = (x_admin_agent_who or "anon").strip()[:200] or "anon"
-
-    sid = body.session_id
-    if not sid and body.create_session and session_store.enabled():
-        sid = await session_store.create_session(who=who, tier=tier, title=body.title or "")
-
-    async def generator():
-        async for chunk in stream_chat_turn(
-            user_message=body.message,
-            tier=tier,
-            session_id=sid,
-            who=who,
-            openrouter_api_key=api_key,
-        ):
-            yield chunk
-
-    return StreamingResponse(generator(), media_type="text/event-stream")
-
-
 @app.post("/v1/chat")
 async def legacy_chat(
     body: LegacyChatRequest,
     x_admin_agent_secret: Optional[str] = Header(default=None, alias="X-Admin-Agent-Secret"),
 ) -> Dict[str, Any]:
-    """Backwards-compat: single-shot chat with optional codebase RAG, no tools.
-
-    The new UI uses /v1/chat/stream. Keep this around so the old UI still works
-    while users migrate.
-    """
+    """Chat with optional semantic codebase context (RAG). No tool calling — one model round-trip."""
     _require_secret(x_admin_agent_secret)
     api_key = _openrouter_key()
     model = (os.getenv("OPENROUTER_MODEL_LEGACY") or "openai/gpt-4o-mini").strip()
     system = (
         "You are the Prevencion admin assistant. Answer in the user's language, concise, "
-        "professional. Do not invent data; cite paths when referring to files."
+        "professional. Do not invent data; cite paths when referring to files.\n\n"
+        "**This HTTP mode is simple:** you may receive optional codebase snippets from "
+        "semantic search (see ## Context below), but you do **not** receive live tool "
+        "calls — no sql_execute, run_shell, read_log, http_request, or symfony_console. "
+        "If the user asks for live DB/VM/log access, explain honestly that you only have "
+        "the pasted code context here; suggest they run diagnostics on the server or use "
+        "their usual admin tooling."
     )
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system}]
     if body.messages:
@@ -208,7 +172,7 @@ async def legacy_chat(
     data = r.json()
     msg = (data.get("choices") or [{}])[0].get("message") or {}
     text = assistant_message_text(msg).strip() or "(vacío del modelo)"
-    return {"reply": text, "model": model}
+    return {"reply": text, "model": model, "mode": "legacy"}
 
 
 # --- codebase index ------------------------------------------------------------------
