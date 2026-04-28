@@ -79,6 +79,10 @@ def _openrouter_key() -> str:
     return k
 
 
+def _header_truthy(val: Optional[str]) -> bool:
+    return (val or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 # --- pydantic models -----------------------------------------------------------------
 class SessionCreateRequest(BaseModel):
     title: Optional[str] = None
@@ -128,13 +132,22 @@ async def legacy_chat(
     x_admin_agent_secret: Optional[str] = Header(default=None, alias="X-Admin-Agent-Secret"),
     x_admin_agent_tier: Optional[str] = Header(default="user", alias="X-Admin-Agent-Tier"),
     x_admin_agent_who: Optional[str] = Header(default="anon", alias="X-Admin-Agent-Who"),
+    x_admin_agent_agentic: Optional[str] = Header(default=None, alias="X-Admin-Agent-Agentic"),
 ) -> Dict[str, Any]:
     """Modo legacy: RAG + una ida al modelo. Modo agentico: bucle con herramientas, misma respuesta JSON."""
     _require_secret(x_admin_agent_secret)
     api_key = _openrouter_key()
     product = (os.getenv("APP_PRODUCT") or "prevencion").strip() or "prevencion"
 
-    if body.agentic:
+    use_agentic = bool(body.agentic) or _header_truthy(x_admin_agent_agentic)
+    logger.info(
+        "v1/chat use_agentic=%s body.agentic=%s header X-Admin-Agent-Agentic=%r",
+        use_agentic,
+        body.agentic,
+        x_admin_agent_agentic,
+    )
+
+    if use_agentic:
         tier = _resolve_tier(x_admin_agent_tier)
         who = (x_admin_agent_who or "anon").strip()[:200] or "anon"
         sid = (body.session_id or "").strip() or None
@@ -175,9 +188,11 @@ async def legacy_chat(
             c = (m.get("content") or "").strip()
             if c and r in ("user", "assistant", "system"):
                 messages.append({"role": r, "content": c})
+    codebase_hits = 0
     if body.use_codebase:
         try:
             hits = await get_index().search(body.message, api_key, top_k=8)
+            codebase_hits = len(hits) if hits else 0
             if hits:
                 rag = "\n\n## Context (semantic code search):\n\n" + "\n\n---\n\n".join(
                     f"### {h['path']}\n{h['chunk']}" for h in hits
@@ -203,7 +218,13 @@ async def legacy_chat(
     data = r.json()
     msg = (data.get("choices") or [{}])[0].get("message") or {}
     text = assistant_message_text(msg).strip() or "(vacío del modelo)"
-    return {"reply": text, "model": model, "mode": "legacy", "product": product}
+    return {
+        "reply": text,
+        "model": model,
+        "mode": "legacy",
+        "product": product,
+        "codebase_hits": codebase_hits,
+    }
 
 
 # --- codebase index ------------------------------------------------------------------

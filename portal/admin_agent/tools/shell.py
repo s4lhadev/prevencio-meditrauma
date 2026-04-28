@@ -17,11 +17,11 @@ SCHEMA: Dict[str, Any] = {
     "function": {
         "name": "run_shell",
         "description": (
-            "Run a shell command on the VM (uvicorn process is on the VM, no SSH needed). "
-            "bash -lc, pipefail. Use for: docker (none here), systemd, journalctl, curl localhost ports, "
-            "ls/cat/grep/tail under repo paths, sudo -n if NOPASSWD permits. "
-            f"Timeout {cfg.SHELL_TIMEOUT_S}s, output capped at {cfg.SHELL_MAX_OUTPUT} bytes. "
-            "Disabled when AGENT_SHELL_DISABLE=1. Audited."
+            "Non-interactive shell as the **OS user** running uvicorn. For privileged commands, "
+            "use **`sudo -n …`** when the host has passwordless sudo configured for that user "
+            "(see DEPLOY.md). No TTY — interactive sudo will hang or fail. "
+            f"Timeout {cfg.SHELL_TIMEOUT_S}s, output cap {cfg.SHELL_MAX_OUTPUT} bytes. "
+            "AGENT_SHELL_DISABLE=1 disables this tool. Audited."
         ),
         "parameters": {
             "type": "object",

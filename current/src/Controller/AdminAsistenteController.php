@@ -231,9 +231,13 @@ class AdminAsistenteController extends AbstractController
             }
         }
         $timeout = $agentic ? 300 : 130;
+        $header = "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\nX-Admin-Agent-Tier: dev\r\n";
+        if ($agentic) {
+            $header .= "X-Admin-Agent-Agentic: 1\r\n";
+        }
         $fetch = $this->fetchAdminAgent($url, array(
             'method' => 'POST',
-            'header' => "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\nX-Admin-Agent-Tier: dev\r\n",
+            'header' => $header,
             'content' => json_encode($payload),
             'timeout' => $timeout,
         ));
