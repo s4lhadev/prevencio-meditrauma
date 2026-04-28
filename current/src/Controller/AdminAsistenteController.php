@@ -573,7 +573,27 @@ class AdminAsistenteController extends AbstractController
             while (ob_get_level() > 0) {
                 @ob_end_flush();
             }
+            $httpCode = 0;
+            $errorBuffer = '';
             $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($curl, $header) use (&$httpCode) {
+                if (preg_match('/^HTTP\/\S+\s+(\d+)/', $header, $m)) {
+                    $httpCode = (int) $m[1];
+                }
+
+                return strlen($header);
+            });
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, static function ($curl, $chunk) use (&$httpCode, &$errorBuffer) {
+                if ($httpCode >= 400) {
+                    $errorBuffer .= $chunk;
+
+                    return strlen($chunk);
+                }
+                echo $chunk;
+                @flush();
+
+                return strlen($chunk);
+            });
             curl_setopt_array($ch, array(
                 CURLOPT_POST => true,
                 CURLOPT_POSTFIELDS => json_encode($payload),
@@ -590,18 +610,25 @@ class AdminAsistenteController extends AbstractController
                 CURLOPT_TCP_NODELAY => true,
                 CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
                 CURLOPT_RETURNTRANSFER => false,
-                CURLOPT_WRITEFUNCTION => function ($curl, $chunk) {
-                    echo $chunk;
-                    @flush();
-
-                    return strlen($chunk);
-                },
             ));
             $ok = curl_exec($ch);
-            if ($ok === false) {
-                $err = curl_error($ch) ?: 'curl error';
+            $curlErr = curl_error($ch) ?: '';
+            $curlErrNo = curl_errno($ch);
+            if (false === $ok || $curlErrNo) {
                 echo "event: error\n";
-                echo 'data: '.json_encode(array('message' => 'proxy: '.$err))."\n\n";
+                echo 'data: '.json_encode(array(
+                    'message' => 'proxy: '.($curlErr !== '' ? $curlErr : 'curl error'),
+                ), JSON_UNESCAPED_UNICODE)."\n\n";
+                @flush();
+            } elseif ($httpCode >= 400) {
+                $detail = $errorBuffer !== '' ? $errorBuffer : ('HTTP '.$httpCode);
+                if (strlen($detail) > 1800) {
+                    $detail = substr($detail, 0, 1800).'…';
+                }
+                echo "event: error\n";
+                echo 'data: '.json_encode(array(
+                    'message' => 'admin_agent '.$httpCode.': '.$detail,
+                ), JSON_UNESCAPED_UNICODE)."\n\n";
                 @flush();
             }
             curl_close($ch);

@@ -266,39 +266,57 @@
             var reader = r.body.getReader();
             var decoder = new TextDecoder('utf-8');
             var buf = '';
+            var streamHadError = false;
+            function handleSseEvents(events) {
+                events.forEach(function (ev) {
+                    var data = {};
+                    try { data = JSON.parse(ev.data); } catch (e) {
+                        appendNote('(SSE data no JSON: ' + String(ev.data).slice(0, 120) + '…)');
+                        return;
+                    }
+                    if (ev.event === 'session') {
+                        if (data.session_id) {
+                            sessionId = data.session_id;
+                            sessionIdLabel.textContent = sessionId.slice(0, 8) + '…' + sessionId.slice(-4);
+                        }
+                        if (Array.isArray(data.tools)) {
+                            appendNote('Tools: ' + data.tools.join(', ') + ' · modelo: ' + (data.model || '?') + ' · max rounds: ' + (data.max_rounds || '?'));
+                        }
+                    } else if (ev.event === 'content') {
+                        assistant.body.textContent += (data.delta || '');
+                        log.scrollTop = log.scrollHeight;
+                    } else if (ev.event === 'tool_call') {
+                        toolHandles[data.id] = appendTool(data.name, data.args_preview);
+                    } else if (ev.event === 'tool_result') {
+                        fillToolResult(toolHandles[data.id], data.ok, data.preview);
+                    } else if (ev.event === 'error') {
+                        streamHadError = true;
+                        appendNote('⚠ ' + (data.message || 'error'));
+                    } else if (ev.event === 'done') {
+                        // finished
+                    }
+                });
+            }
             function pump() {
                 return reader.read().then(function (chunk) {
-                    if (chunk.done) return;
+                    if (chunk.done) {
+                        buf += decoder.decode(new Uint8Array(), { stream: false });
+                        var parsed = parseSseLine(buf);
+                        handleSseEvents(parsed.events);
+                        var rest = (parsed.buf || '').trim();
+                        if (rest !== '') {
+                            appendNote('(Buffer final no reconocido como SSE: ' + rest.slice(0, 200) + (rest.length > 200 ? '…' : '') + ')');
+                        }
+                        var out = (assistant.body.textContent || '').trim();
+                        if (!streamHadError && out === '') {
+                            appendNote('Sin respuesta del modelo. Revisa en Red la respuesta de chat/stream, OPENROUTER_API_KEY en el agente y que ADMIN_AGENT_SECRET coincida entre PHP y uvicorn.');
+                        }
+                        return;
+                    }
                     buf += decoder.decode(chunk.value, { stream: true });
                     var parsed = parseSseLine(buf);
                     buf = parsed.buf;
-                    parsed.events.forEach(function (ev) {
-                        var data = {};
-                        try { data = JSON.parse(ev.data); } catch (e) {
-                            appendNote('(SSE data no JSON: ' + String(ev.data).slice(0, 120) + '…)');
-                            return;
-                        }
-                        if (ev.event === 'session') {
-                            if (data.session_id) {
-                                sessionId = data.session_id;
-                                sessionIdLabel.textContent = sessionId.slice(0, 8) + '…' + sessionId.slice(-4);
-                            }
-                            if (Array.isArray(data.tools)) {
-                                appendNote('Tools: ' + data.tools.join(', ') + ' · modelo: ' + (data.model || '?') + ' · max rounds: ' + (data.max_rounds || '?'));
-                            }
-                        } else if (ev.event === 'content') {
-                            assistant.body.textContent += (data.delta || '');
-                            log.scrollTop = log.scrollHeight;
-                        } else if (ev.event === 'tool_call') {
-                            toolHandles[data.id] = appendTool(data.name, data.args_preview);
-                        } else if (ev.event === 'tool_result') {
-                            fillToolResult(toolHandles[data.id], data.ok, data.preview);
-                        } else if (ev.event === 'error') {
-                            appendNote('⚠ ' + (data.message || 'error'));
-                        } else if (ev.event === 'done') {
-                            // finished
-                        }
-                    });
+                    handleSseEvents(parsed.events);
                     return pump();
                 });
             }
