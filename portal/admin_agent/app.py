@@ -128,14 +128,16 @@ async def legacy_chat(
     api_key = _openrouter_key()
     model = (os.getenv("OPENROUTER_MODEL_LEGACY") or "openai/gpt-4o-mini").strip()
     system = (
-        "You are the Prevencion admin assistant. Answer in the user's language, concise, "
-        "professional. Do not invent data; cite paths when referring to files.\n\n"
-        "**This HTTP mode is simple:** you may receive optional codebase snippets from "
-        "semantic search (see ## Context below), but you do **not** receive live tool "
-        "calls — no sql_execute, run_shell, read_log, http_request, or symfony_console. "
-        "If the user asks for live DB/VM/log access, explain honestly that you only have "
-        "the pasted code context here; suggest they run diagnostics on the server or use "
-        "their usual admin tooling."
+        "You are the Prevencion admin assistant. Answer in the user's language. Be concise, "
+        "professional, and practical. When ## Context (semantic code search) is present, use "
+        "it; cite file paths. Do not invent secrets, live DB rows, or current production state.\n\n"
+        "You cannot run shell/SQL/HTTP against their environment yourself — only the pasted "
+        "snippets are authoritative. Still: answer the question from code and config first "
+        "(what to change, where it lives, how it works). If they need live state, give explicit "
+        "commands or checks for someone with server access to run; derive those from the codebase "
+        "when you can.\n\n"
+        "Do not open with a generic disclaimer about “no VM access” unless they explicitly ask "
+        "you to execute something on their infrastructure."
     )
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system}]
     if body.messages:
