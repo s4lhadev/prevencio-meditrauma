@@ -31,6 +31,27 @@ from tools import ToolContext
 logger = logging.getLogger(__name__)
 
 
+def _assistant_text(msg: Dict[str, Any]) -> str:
+    """Normalize OpenRouter/Anthropic message.content (str or list of content blocks)."""
+    c = msg.get("content")
+    if c is None:
+        return ""
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        parts: List[str] = []
+        for block in c:
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(str(block.get("text") or ""))
+                elif "text" in block:
+                    parts.append(str(block.get("text") or ""))
+            elif isinstance(block, str):
+                parts.append(block)
+        return "".join(parts)
+    return str(c)
+
+
 def _sse(event: str, data: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
@@ -199,7 +220,8 @@ async def stream_chat_turn(
         tool_calls = msg.get("tool_calls") or None
 
         # Stream any "preamble" text the assistant emitted alongside tool calls
-        preamble = (msg.get("content") or "").strip()
+        raw_text = _assistant_text(msg)
+        preamble = raw_text.strip()
         if preamble:
             captured_assistant_text_parts.append(preamble)
             for i in range(0, len(preamble), cfg.TEXT_CHUNK_SIZE):
@@ -207,7 +229,7 @@ async def stream_chat_turn(
 
         if not tool_calls:
             # Final answer round.
-            full_text = "".join(captured_assistant_text_parts) or (msg.get("content") or "")
+            full_text = "".join(captured_assistant_text_parts) or raw_text
             if session_id and session_store.enabled():
                 await session_store.append_message(
                     session_id,

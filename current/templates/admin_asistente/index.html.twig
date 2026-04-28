@@ -223,7 +223,8 @@
 
     // ---------- SSE consumer ----------
     function parseSseLine(buf) {
-        // Returns array of { event, data } and remaining buffer
+        // CRLF-safe: proxies/Apache pueden enviar \r\n; el delimitador SSE debe detectarse igual.
+        buf = buf.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         var events = [];
         var idx;
         while ((idx = buf.indexOf('\n\n')) >= 0) {
@@ -273,7 +274,10 @@
                     buf = parsed.buf;
                     parsed.events.forEach(function (ev) {
                         var data = {};
-                        try { data = JSON.parse(ev.data); } catch (e) { return; }
+                        try { data = JSON.parse(ev.data); } catch (e) {
+                            appendNote('(SSE data no JSON: ' + String(ev.data).slice(0, 120) + '…)');
+                            return;
+                        }
                         if (ev.event === 'session') {
                             if (data.session_id) {
                                 sessionId = data.session_id;
