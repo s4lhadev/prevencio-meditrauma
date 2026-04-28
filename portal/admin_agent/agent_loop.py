@@ -31,7 +31,7 @@ from tools import ToolContext
 logger = logging.getLogger(__name__)
 
 
-def _assistant_text(msg: Dict[str, Any]) -> str:
+def assistant_message_text(msg: Dict[str, Any]) -> str:
     """Normalize OpenRouter/Anthropic message.content (str or list of content blocks)."""
     c = msg.get("content")
     if c is None:
@@ -220,7 +220,7 @@ async def stream_chat_turn(
         tool_calls = msg.get("tool_calls") or None
 
         # Stream any "preamble" text the assistant emitted alongside tool calls
-        raw_text = _assistant_text(msg)
+        raw_text = assistant_message_text(msg)
         preamble = raw_text.strip()
         if preamble:
             captured_assistant_text_parts.append(preamble)
@@ -230,6 +230,19 @@ async def stream_chat_turn(
         if not tool_calls:
             # Final answer round.
             full_text = "".join(captured_assistant_text_parts) or raw_text
+            if not (full_text or "").strip():
+                yield _sse(
+                    "error",
+                    {
+                        "message": (
+                            "La API devolvió un mensaje vacío (sin texto ni tool_calls). "
+                            "Revisa OPENROUTER_MODEL, cuota/créditos y logs del agente."
+                        ),
+                        "finish_reason": choice.get("finish_reason"),
+                    },
+                )
+                yield _sse("done", {"rounds": round_num + 1})
+                return
             if session_id and session_store.enabled():
                 await session_store.append_message(
                     session_id,

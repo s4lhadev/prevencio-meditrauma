@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 import config as cfg
 import operator_config as opcfg
 import session_store
-from agent_loop import stream_chat_turn
+from agent_loop import assistant_message_text, stream_chat_turn
 from codebase_index import get_index
 
 logging.basicConfig(level=logging.INFO)
@@ -206,8 +206,9 @@ async def legacy_chat(
     if r.status_code >= 400:
         raise HTTPException(502, f"LLM error {r.status_code}: {(r.text or '')[:1000]}")
     data = r.json()
-    text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
-    return {"reply": text or "(empty)", "model": model}
+    msg = (data.get("choices") or [{}])[0].get("message") or {}
+    text = assistant_message_text(msg).strip() or "(vacío del modelo)"
+    return {"reply": text, "model": model}
 
 
 # --- codebase index ------------------------------------------------------------------

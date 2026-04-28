@@ -239,6 +239,26 @@
         }
         return { events: events, buf: buf };
     }
+    /** Si el SSE termina sin texto (p. ej. modelo vacío o buffer Apache), misma pregunta vía JSON /v1/chat — sin tools pero usable. */
+    function fallbackJsonChat(msgText, assistantTurn) {
+        if (!cfg) return Promise.resolve();
+        return fetch('{{ path('admin_asistente_chat') }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ _token: token, message: msgText, use_codebase: true })
+        }).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+        }).then(function (o) {
+            if (o.ok && o.j && typeof o.j.reply === 'string') {
+                assistantTurn.body.textContent = o.j.reply;
+                log.scrollTop = log.scrollHeight;
+                return;
+            }
+            appendNote('⚠ Respuesta directa falló: ' + JSON.stringify(o.j || {}).slice(0, 400));
+        }).catch(function (e) {
+            appendNote('⚠ ' + (e && e.message ? e.message : e));
+        });
+    }
     function streamChat(text) {
         var assistant = startAssistantTurn();
         var toolHandles = {}; // tool_call id → handle
@@ -309,9 +329,12 @@
                         }
                         var out = (assistant.body.textContent || '').trim();
                         if (!streamHadError && out === '') {
-                            appendNote('Sin respuesta del modelo. Revisa en Red la respuesta de chat/stream, OPENROUTER_API_KEY en el agente y que ADMIN_AGENT_SECRET coincida entre PHP y uvicorn.');
+                            if (cfg) {
+                                return fallbackJsonChat(text, assistant);
+                            }
+                            appendNote('Streaming vacío: activa el asistente en .env y revisa journalctl del agente.');
                         }
-                        return;
+                        return Promise.resolve();
                     }
                     buf += decoder.decode(chunk.value, { stream: true });
                     var parsed = parseSseLine(buf);
