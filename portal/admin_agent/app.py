@@ -63,7 +63,12 @@ app = FastAPI(title="MDT Admin Agent (Prevencion)", version="2.0.0")
 # --- auth ----------------------------------------------------------------------------
 def _require_secret(x_admin_agent_secret: Optional[str]) -> None:
     expected = (os.getenv("ADMIN_AGENT_SECRET") or "").strip()
-    if not expected or (x_admin_agent_secret or "").strip() != expected:
+    if not expected:
+        raise HTTPException(
+            503,
+            "ADMIN_AGENT_SECRET not set — ensure admin_agent/.env or systemd EnvironmentFile.",
+        )
+    if (x_admin_agent_secret or "").strip() != expected:
         raise HTTPException(401, "Invalid or missing X-Admin-Agent-Secret")
 
 
