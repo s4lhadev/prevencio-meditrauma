@@ -36,6 +36,9 @@ class LoginListener
         $user = $event->getAuthenticationToken()->getUser();
         $repository = $em->getRepository('App\Entity\User');
         $usuario = $repository->findForSecurityUser($user);
+        if (null === $usuario) {
+            return;
+        }
         $id = $usuario->getId();
         $username = $usuario->getUsername();
         $rol = $usuario->getRol();

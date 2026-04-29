@@ -36,6 +36,36 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         $this->_em->flush();
     }
 
+    /**
+     * Usuario gestionado por Doctrine con rol cargado (listeners y controladores legacy post-login).
+     */
+    public function findForSecurityUser(UserInterface $user): ?User
+    {
+        if (!$user instanceof User) {
+            return null;
+        }
+        $id = $user->getId();
+        if (null !== $id) {
+            return $this->createQueryBuilder('u')
+                ->leftJoin('u.rol', 'r')->addSelect('r')
+                ->andWhere('u.id = :id')
+                ->setParameter('id', $id)
+                ->getQuery()
+                ->getOneOrNullResult();
+        }
+        $username = $user->getUsername();
+        if (null === $username || '' === $username) {
+            return null;
+        }
+
+        return $this->createQueryBuilder('u')
+            ->leftJoin('u.rol', 'r')->addSelect('r')
+            ->andWhere('u.username = :u OR u.usernameCanonical = :u OR u.emailCanonical = :u')
+            ->setParameter('u', $username)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
     // /**
     //  * @return User[] Returns an array of User objects
     //  */
