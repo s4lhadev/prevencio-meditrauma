@@ -182,6 +182,7 @@ async def stream_chat_turn(
         windowed = session_store.select_window(
             prior, budget_chars=op.history_budget_chars, min_recent=op.history_min_recent
         )
+        windowed = session_store.strip_leading_orphan_tool_messages(windowed)
         for entry in session_store.history_for_openai(windowed):
             messages.append(entry)
         # persist this user turn now (so subsequent turns see it)

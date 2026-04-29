@@ -179,6 +179,14 @@ def history_for_openai(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+def strip_leading_orphan_tool_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """select_window() puede dejar un sufijo que empieza por role=tool sin el assistant padre."""
+    out = list(messages)
+    while out and out[0].get("role") == "tool":
+        out.pop(0)
+    return out
+
+
 def select_window(
     messages: List[Dict[str, Any]],
     *,
