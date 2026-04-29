@@ -57,6 +57,13 @@
         textarea { flex: 1; min-height: 56px; max-height: 200px; resize: vertical; padding: 0.7rem 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: #0d1117; color: var(--text); font-family: inherit; font-size: 0.95rem; }
         .meta { font-size: 0.72rem; color: var(--muted); margin-top: 0.75rem; }
         .meta .session-id { font-family: ui-monospace, monospace; }
+        .opgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem 1rem; margin-top: 0.5rem; }
+        @media (max-width: 640px) { .opgrid { grid-template-columns: 1fr; } }
+        .opgrid label { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 0.2rem; }
+        .opgrid input, .opgrid textarea { width: 100%; padding: 0.45rem 0.55rem; border-radius: 6px; border: 1px solid var(--border); background: #0d1117; color: var(--text); font: inherit; font-size: 0.85rem; }
+        .opgrid textarea { min-height: 72px; resize: vertical; }
+        .opspan2 { grid-column: 1 / -1; }
+        #opstatus { font-size: 0.8rem; color: var(--muted); margin-top: 0.45rem; min-height: 1.2em; }
     </style>
 </head>
 <body>
@@ -98,6 +105,42 @@
             <button type="button" id="ixincr" {% if not assistant_configured %}disabled{% endif %}>Reindexar incremental</button>
             <button type="button" class="danger" id="ixfull" {% if not assistant_configured %}disabled{% endif %}>Reindexar completo</button>
         </div>
+    </div>
+
+    <div class="ix" id="oppanel">
+        <h2>Ajustes del agente (operador)</h2>
+        <p>Con <code>AGENT_DB_DSN</code> configurado, los cambios se guardan en Postgres (<code>agent.operator_config</code>). Sin DSN solo verás valores por defecto y el guardado fallará hasta que haya base de datos del agente.</p>
+        <div class="opgrid">
+            <div>
+                <label for="op_rounds">Máx. rondas de herramientas</label>
+                <input type="number" id="op_rounds" min="1" max="64" step="1">
+            </div>
+            <div>
+                <label for="op_temp">Temperatura</label>
+                <input type="number" id="op_temp" min="0" max="2" step="0.05">
+            </div>
+            <div>
+                <label for="op_hbud">Presupuesto historial (caract.)</label>
+                <input type="number" id="op_hbud" min="1000" max="500000" step="500">
+            </div>
+            <div>
+                <label for="op_hmin">Mín. mensajes recientes</label>
+                <input type="number" id="op_hmin" min="1" max="500" step="1">
+            </div>
+            <div class="opspan2">
+                <label for="op_model">Modelo OpenRouter (slug)</label>
+                <input type="text" id="op_model" placeholder="p. ej. anthropic/claude-sonnet-4.6" autocomplete="off">
+            </div>
+            <div class="opspan2">
+                <label for="op_append">Texto a añadir al system (instrucciones del operador)</label>
+                <textarea id="op_append" placeholder="Reglas locales, tono, qué evitar…"></textarea>
+            </div>
+        </div>
+        <div class="btns">
+            <button type="button" id="opsave" {% if not assistant_configured %}disabled{% endif %}>Guardar ajustes</button>
+            <button type="button" class="secondary" id="opreload" {% if not assistant_configured %}disabled{% endif %}>Recargar desde servidor</button>
+        </div>
+        <p id="opstatus"></p>
     </div>
 
     <div class="log" id="log" aria-live="polite"></div>
@@ -162,6 +205,70 @@
     document.getElementById('ixincr').addEventListener('click', function () { doReindex(false); });
     document.getElementById('ixfull').addEventListener('click', function () { doReindex(true); });
     loadIx();
+
+    var opRounds = document.getElementById('op_rounds');
+    var opTemp = document.getElementById('op_temp');
+    var opModel = document.getElementById('op_model');
+    var opAppend = document.getElementById('op_append');
+    var opHbud = document.getElementById('op_hbud');
+    var opHmin = document.getElementById('op_hmin');
+    var opStatus = document.getElementById('opstatus');
+    function fillOperatorForm(j) {
+        if (!j || j.error) return;
+        opRounds.value = j.max_tool_rounds != null ? j.max_tool_rounds : '';
+        opTemp.value = j.temperature != null ? j.temperature : '';
+        opModel.value = j.openrouter_model != null ? j.openrouter_model : '';
+        opAppend.value = j.system_append != null ? j.system_append : '';
+        if (opHbud) opHbud.value = j.history_budget_chars != null ? j.history_budget_chars : '';
+        if (opHmin) opHmin.value = j.history_min_recent != null ? j.history_min_recent : '';
+        var env = j.env_model_default || '—';
+        var cap = j.env_max_tool_rounds_cap != null ? j.env_max_tool_rounds_cap : '—';
+        var st = j.store || '—';
+        opStatus.textContent = 'Almacén: ' + st + ' · modelo env ' + env + ' · tope rondas ' + cap;
+    }
+    function loadOperatorConfig() {
+        if (!cfg) return;
+        opStatus.textContent = 'Cargando…';
+        fetch('{{ path('admin_asistente_operator_config_get') }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j.error) { opStatus.textContent = 'Error: ' + JSON.stringify(j); return; }
+                fillOperatorForm(j);
+            })
+            .catch(function (e) { opStatus.textContent = 'Error: ' + e; });
+    }
+    function saveOperatorConfig() {
+        if (!cfg) return;
+        opStatus.textContent = 'Guardando…';
+        var rounds = parseInt(String(opRounds.value), 10);
+        var temp = parseFloat(String(opTemp.value));
+        var hb = opHbud ? parseInt(String(opHbud.value), 10) : NaN;
+        var hm = opHmin ? parseInt(String(opHmin.value), 10) : NaN;
+        fetch('{{ path('admin_asistente_operator_config_save') }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                _token: token,
+                max_tool_rounds: isNaN(rounds) ? undefined : rounds,
+                temperature: isNaN(temp) ? undefined : temp,
+                openrouter_model: opModel.value,
+                system_append: opAppend.value,
+                history_budget_chars: isNaN(hb) ? undefined : hb,
+                history_min_recent: isNaN(hm) ? undefined : hm
+            })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (o) {
+            if (!o.ok || o.j.error) {
+                opStatus.textContent = 'Error: ' + JSON.stringify(o.j || o);
+                return;
+            }
+            fillOperatorForm(o.j);
+            opStatus.textContent = 'Guardado.';
+        }).catch(function (e) { opStatus.textContent = 'Error: ' + e; });
+    }
+    document.getElementById('opsave').addEventListener('click', saveOperatorConfig);
+    document.getElementById('opreload').addEventListener('click', loadOperatorConfig);
+    loadOperatorConfig();
 
     // ---------- chat rendering ----------
     function el(tag, cls, text) {

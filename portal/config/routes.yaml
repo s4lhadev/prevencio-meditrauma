@@ -29,6 +29,16 @@ admin_asistente_reindex:
     controller: App\Controller\AdminAsistenteController::reindex
     methods: POST
 
+admin_asistente_operator_config_get:
+    path: /agent/operator-config
+    controller: App\Controller\AdminAsistenteController::operatorConfigGet
+    methods: GET
+
+admin_asistente_operator_config_save:
+    path: /agent/operator-config
+    controller: App\Controller\AdminAsistenteController::operatorConfigSave
+    methods: POST
+
 dashboard:
     path: /
     controller: App\Controller\HomeController::index

@@ -315,6 +315,74 @@ class AdminAsistenteController extends AbstractController
         return new JsonResponse($decoded, 200);
     }
 
+    public function operatorConfigGet(Request $request): JsonResponse
+    {
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
+        }
+        if (!$request->isMethod('GET')) {
+            return new JsonResponse(array('error' => 'method'), 405);
+        }
+        $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
+        $internalSecret = $this->adminAgentSecret();
+        if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
+            return new JsonResponse(array('error' => 'agent_not_configured'), 503);
+        }
+        $url = $base.'/v1/operator/config';
+        $fetch = $this->fetchAdminAgent($url, array(
+            'method' => 'GET',
+            'header' => "X-Admin-Agent-Secret: ".$internalSecret."\r\n",
+            'timeout' => 30,
+        ));
+        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent.', $internalSecret);
+        if (null !== $fail) {
+            return $fail;
+        }
+        $decoded = json_decode((string) $fetch['body'], true);
+        if (!is_array($decoded)) {
+            return new JsonResponse(array('error' => 'bad_response'), 502);
+        }
+
+        return new JsonResponse($decoded, 200);
+    }
+
+    public function operatorConfigSave(Request $request): JsonResponse
+    {
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
+        }
+        if (!$request->isMethod('POST')) {
+            return new JsonResponse(array('error' => 'method'), 405);
+        }
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data) || !isset($data['_token']) || !$this->isValidAgentAjaxToken((string) $data['_token'])) {
+            return new JsonResponse(array('error' => 'csrf'), 400);
+        }
+        unset($data['_token']);
+        $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
+        $internalSecret = $this->adminAgentSecret();
+        if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
+            return new JsonResponse(array('error' => 'agent_not_configured'), 503);
+        }
+        $url = $base.'/v1/operator/config';
+        $fetch = $this->fetchAdminAgent($url, array(
+            'method' => 'PUT',
+            'header' => "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\n",
+            'content' => json_encode($data),
+            'timeout' => 30,
+        ));
+        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent.', $internalSecret);
+        if (null !== $fail) {
+            return $fail;
+        }
+        $decoded = json_decode((string) $fetch['body'], true);
+        if (!is_array($decoded)) {
+            return new JsonResponse(array('error' => 'bad_response', 'raw' => substr((string) $fetch['body'], 0, 500)), 502);
+        }
+
+        return new JsonResponse($decoded, 200);
+    }
+
     /**
      * PHP http wrapper returns false on 4xx/5xx unless ignore_errors is true; then we read status from $http_response_header.
      *
