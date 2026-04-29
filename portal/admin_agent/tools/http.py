@@ -95,4 +95,4 @@ async def run(args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-register(Tool(name="http_request", schema=SCHEMA, run=run, tier="dev"))
+register(Tool(name="http_request", schema=SCHEMA, run=run, tier="user"))

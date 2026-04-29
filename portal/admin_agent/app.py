@@ -97,9 +97,24 @@ class OperatorConfigUpdateBody(BaseModel):
     expected_version: Optional[int] = None
     system_append: Optional[str] = None
     max_rounds: Optional[int] = None
+    max_tool_rounds: Optional[int] = None
     history_budget_chars: Optional[int] = None
     history_min_recent: Optional[int] = None
+    openrouter_model: Optional[str] = None
+    temperature: Optional[float] = None
     updated_by: Optional[str] = "operator"
+
+
+class OperatorConfigFlatBody(BaseModel):
+    """Alias Medisalut /v1/operator/config (mismo secreto; sin versión obligatoria)."""
+
+    max_tool_rounds: Optional[int] = Field(None, ge=1, le=64)
+    openrouter_model: Optional[str] = Field(None, max_length=500)
+    system_append: Optional[str] = Field(None, max_length=50000)
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
+    history_budget_chars: Optional[int] = Field(None, ge=1000, le=500_000)
+    history_min_recent: Optional[int] = Field(None, ge=1, le=500)
+    expected_version: Optional[int] = None
 
 
 # --- /v1/chat: RAG one-shot o agentico (tools, sin streaming HTTP) --------------------
@@ -111,6 +126,7 @@ class LegacyChatRequest(BaseModel):
     session_id: Optional[str] = None
     create_session: bool = True
     title: Optional[str] = None
+    model: Optional[str] = Field(None, max_length=500)
 
 
 class ReindexRequest(BaseModel):
@@ -158,14 +174,15 @@ async def legacy_chat(
         sid = (body.session_id or "").strip() or None
         if not sid and body.create_session and session_store.enabled():
             sid = await session_store.create_session(who=who, tier=tier, title=body.title or "")
-        model_agent = (os.getenv("OPENROUTER_MODEL") or "").strip() or None
+        op = await opcfg.get_config()
+        mo = (body.model or "").strip() or (op.openrouter_model or "").strip() or None
         out = await collect_agent_turn(
             user_message=body.message,
             tier=tier,
             session_id=sid,
             who=who,
             openrouter_api_key=api_key,
-            model_override=model_agent,
+            model_override=mo,
         )
         out["product"] = product
         return out
@@ -300,6 +317,7 @@ async def list_session_messages_ep(
 
 # --- operator config -----------------------------------------------------------------
 @app.get("/v1/operator-config")
+@app.get("/v1/operator/config")
 async def get_operator_cfg(
     x_admin_agent_secret: Optional[str] = Header(default=None, alias="X-Admin-Agent-Secret"),
 ) -> Dict[str, Any]:
@@ -309,26 +327,56 @@ async def get_operator_cfg(
         "version": op.version,
         "system_append": op.system_append,
         "max_rounds": op.max_rounds,
+        "max_tool_rounds": op.max_rounds,
+        "openrouter_model": op.openrouter_model,
+        "temperature": op.temperature,
         "history_budget_chars": op.history_budget_chars,
         "history_min_recent": op.history_min_recent,
+        "env_model_default": cfg.OPENROUTER_MODEL,
+        "env_max_tool_rounds_cap": cfg.MAX_TOOL_ROUNDS,
+        "store": "postgres",
     }
+
+
+@app.put("/v1/operator/config")
+async def put_operator_cfg_slash(
+    body: OperatorConfigFlatBody,
+    x_admin_agent_secret: Optional[str] = Header(default=None, alias="X-Admin-Agent-Secret"),
+) -> Dict[str, Any]:
+    _require_secret(x_admin_agent_secret)
+    patch = body.model_dump(exclude_unset=True)
+    exp = patch.pop("expected_version", None)
+    try:
+        await opcfg.update_config(
+            system_append=patch.get("system_append"),
+            max_rounds=patch.get("max_tool_rounds"),
+            history_budget_chars=patch.get("history_budget_chars"),
+            history_min_recent=patch.get("history_min_recent"),
+            openrouter_model=patch.get("openrouter_model"),
+            temperature=patch.get("temperature"),
+            expected_version=exp,
+            updated_by="operator",
+        )
+    except RuntimeError as e:
+        raise HTTPException(409, str(e)) from e
+    return await get_operator_cfg(x_admin_agent_secret=x_admin_agent_secret)
 
 
 @app.put("/v1/operator-config")
 async def put_operator_cfg(
     body: OperatorConfigUpdateBody,
     x_admin_agent_secret: Optional[str] = Header(default=None, alias="X-Admin-Agent-Secret"),
-    x_admin_agent_tier: Optional[str] = Header(default="user", alias="X-Admin-Agent-Tier"),
 ) -> Dict[str, Any]:
     _require_secret(x_admin_agent_secret)
-    if _resolve_tier(x_admin_agent_tier) != "dev":
-        raise HTTPException(403, "operator config requires dev tier")
+    mr = body.max_rounds if body.max_rounds is not None else body.max_tool_rounds
     try:
         op = await opcfg.update_config(
             system_append=body.system_append,
-            max_rounds=body.max_rounds,
+            max_rounds=mr,
             history_budget_chars=body.history_budget_chars,
             history_min_recent=body.history_min_recent,
+            openrouter_model=body.openrouter_model,
+            temperature=body.temperature,
             expected_version=body.expected_version,
             updated_by=body.updated_by or "operator",
         )
@@ -338,6 +386,12 @@ async def put_operator_cfg(
         "version": op.version,
         "system_append": op.system_append,
         "max_rounds": op.max_rounds,
+        "max_tool_rounds": op.max_rounds,
+        "openrouter_model": op.openrouter_model,
+        "temperature": op.temperature,
         "history_budget_chars": op.history_budget_chars,
         "history_min_recent": op.history_min_recent,
+        "env_model_default": cfg.OPENROUTER_MODEL,
+        "env_max_tool_rounds_cap": cfg.MAX_TOOL_ROUNDS,
+        "store": "postgres",
     }

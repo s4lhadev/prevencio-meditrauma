@@ -235,4 +235,4 @@ async def _run_sql_execute(args: Dict[str, Any], ctx: ToolContext) -> Dict[str, 
 
 
 register(Tool(name="sql_schema", schema=SCHEMA_SQL_SCHEMA, run=_run_sql_schema, tier="user"))
-register(Tool(name="sql_execute", schema=SCHEMA_SQL_EXECUTE, run=_run_sql_execute, tier="dev"))
+register(Tool(name="sql_execute", schema=SCHEMA_SQL_EXECUTE, run=_run_sql_execute, tier="user"))

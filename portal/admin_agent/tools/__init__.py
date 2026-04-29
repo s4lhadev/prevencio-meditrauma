@@ -23,6 +23,7 @@ class ToolContext:
     session_id: Optional[str]
     openrouter_api_key: str
     audit_log: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None
+    llm_model: str = ""
 
 
 @dataclass

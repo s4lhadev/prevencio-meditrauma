@@ -49,8 +49,9 @@ async def _run_web_search(args: Dict[str, Any], ctx: ToolContext) -> Dict[str, A
         return {"error": "empty query"}
     if not ctx.openrouter_api_key:
         return {"error": "OPENROUTER_API_KEY missing"}
+    model = (ctx.llm_model or cfg.OPENROUTER_MODEL).strip()
     payload = {
-        "model": cfg.OPENROUTER_MODEL,
+        "model": model,
         "messages": [{"role": "user", "content": query}],
         "max_tokens": 1500,
         "temperature": 0.2,

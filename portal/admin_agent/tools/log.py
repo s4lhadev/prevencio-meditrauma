@@ -147,4 +147,4 @@ async def run(args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     return {"error": f"unknown stream kind '{kind}', expected 'file' or 'journal'"}
 
 
-register(Tool(name="read_log", schema=SCHEMA, run=run, tier="dev"))
+register(Tool(name="read_log", schema=SCHEMA, run=run, tier="user"))

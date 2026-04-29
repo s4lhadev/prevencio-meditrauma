@@ -146,17 +146,21 @@ async def stream_chat_turn(
     model_override: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """Drive one user turn end-to-end. SSE str chunks are yielded and the caller writes them."""
-    ctx = ToolContext(
-        tier=tier,
-        session_id=session_id,
-        openrouter_api_key=openrouter_api_key,
-    )
-
-    # 1) load operator config + schema digest
     try:
         op = await opcfg.get_config()
     except Exception:
         op = opcfg.OperatorConfig()
+
+    model_resolved = (model_override or "").strip() or (op.openrouter_model or "").strip() or None
+    model_for_api = model_resolved or cfg.OPENROUTER_MODEL
+    temp = float(op.temperature)
+
+    ctx = ToolContext(
+        tier=tier,
+        session_id=session_id,
+        openrouter_api_key=openrouter_api_key,
+        llm_model=model_for_api,
+    )
     schema_text = ""
     try:
         from tools.sql import get_schema_digest
@@ -193,7 +197,7 @@ async def stream_chat_turn(
         {
             "tier": tier,
             "session_id": session_id,
-            "model": model_override or cfg.OPENROUTER_MODEL,
+            "model": model_for_api,
             "tools": [s["function"]["name"] for s in tool_schemas],
             "max_rounds": op.max_rounds,
         },
@@ -201,7 +205,8 @@ async def stream_chat_turn(
 
     captured_assistant_text_parts: List[str] = []
     captured_tool_calls_for_session: List[Dict[str, Any]] = []
-    rounds = max(1, min(64, int(op.max_rounds or cfg.MAX_TOOL_ROUNDS)))
+    cap = max(1, min(64, cfg.MAX_TOOL_ROUNDS))
+    rounds = max(1, min(cap, int(op.max_rounds or cfg.MAX_TOOL_ROUNDS)))
 
     for round_num in range(rounds):
         try:
@@ -209,7 +214,8 @@ async def stream_chat_turn(
                 api_key=openrouter_api_key,
                 messages=messages,
                 tools=tool_schemas,
-                model=model_override,
+                model=model_resolved,
+                temperature=temp,
             )
         except Exception as e:
             yield _sse("error", {"message": str(e), "round": round_num})

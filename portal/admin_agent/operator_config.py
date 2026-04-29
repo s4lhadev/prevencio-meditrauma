@@ -24,6 +24,8 @@ class OperatorConfig:
     max_rounds: int = cfg.MAX_TOOL_ROUNDS
     history_budget_chars: int = cfg.HISTORY_BUDGET_CHARS
     history_min_recent: int = cfg.HISTORY_MIN_RECENT
+    openrouter_model: str = ""
+    temperature: float = 0.2
 
 
 async def _connect():
@@ -45,8 +47,12 @@ async def get_config() -> OperatorConfig:
         return OperatorConfig()
     try:
         row = await conn.fetchrow(
-            "SELECT version, system_append, max_rounds, history_budget_chars, history_min_recent "
-            "FROM agent.operator_config WHERE id = 1"
+            """
+            SELECT version, system_append, max_rounds, history_budget_chars, history_min_recent,
+                   COALESCE(openrouter_model, '') AS openrouter_model,
+                   COALESCE(temperature, 0.2) AS temperature
+            FROM agent.operator_config WHERE id = 1
+            """
         )
     except Exception as e:
         logger.warning("operator_config: query failed: %s", e)
@@ -64,6 +70,8 @@ async def get_config() -> OperatorConfig:
         max_rounds=int(row["max_rounds"] or cfg.MAX_TOOL_ROUNDS),
         history_budget_chars=int(row["history_budget_chars"] or cfg.HISTORY_BUDGET_CHARS),
         history_min_recent=int(row["history_min_recent"] or cfg.HISTORY_MIN_RECENT),
+        openrouter_model=(row["openrouter_model"] or "").strip(),
+        temperature=float(row["temperature"] if row["temperature"] is not None else 0.2),
     )
 
 
@@ -73,6 +81,8 @@ async def update_config(
     max_rounds: Optional[int] = None,
     history_budget_chars: Optional[int] = None,
     history_min_recent: Optional[int] = None,
+    openrouter_model: Optional[str] = None,
+    temperature: Optional[float] = None,
     expected_version: Optional[int] = None,
     updated_by: str = "operator",
 ) -> OperatorConfig:
@@ -98,8 +108,10 @@ async def update_config(
                   max_rounds = COALESCE($3, max_rounds),
                   history_budget_chars = COALESCE($4, history_budget_chars),
                   history_min_recent = COALESCE($5, history_min_recent),
+                  openrouter_model = COALESCE($6, openrouter_model),
+                  temperature = COALESCE($7, temperature),
                   updated_at = now(),
-                  updated_by = $6
+                  updated_by = $8
                 WHERE id = 1
                 """,
                 new_version,
@@ -107,6 +119,8 @@ async def update_config(
                 max_rounds,
                 history_budget_chars,
                 history_min_recent,
+                openrouter_model,
+                temperature,
                 updated_by,
             )
         else:
@@ -114,14 +128,16 @@ async def update_config(
                 """
                 INSERT INTO agent.operator_config
                   (id, version, system_append, max_rounds, history_budget_chars,
-                   history_min_recent, updated_at, updated_by)
-                VALUES (1, $1, $2, $3, $4, $5, now(), $6)
+                   history_min_recent, openrouter_model, temperature, updated_at, updated_by)
+                VALUES (1, $1, $2, $3, $4, $5, $6, $7, now(), $8)
                 """,
                 new_version,
                 system_append or "",
                 max_rounds or cfg.MAX_TOOL_ROUNDS,
                 history_budget_chars or cfg.HISTORY_BUDGET_CHARS,
                 history_min_recent or cfg.HISTORY_MIN_RECENT,
+                (openrouter_model or "").strip(),
+                float(temperature if temperature is not None else 0.2),
                 updated_by,
             )
     finally:
