@@ -335,7 +335,7 @@ async def get_operator_cfg(
         "history_min_recent": op.history_min_recent,
         "env_model_default": cfg.OPENROUTER_MODEL,
         "env_max_tool_rounds_cap": cfg.MAX_TOOL_ROUNDS,
-        "store": "postgres",
+        "store": "postgres" if cfg.AGENT_DB_DSN else "none",
     }
 
 
@@ -359,7 +359,10 @@ async def put_operator_cfg_slash(
             updated_by="operator",
         )
     except RuntimeError as e:
-        raise HTTPException(409, str(e)) from e
+        msg = str(e)
+        if "version conflict" in msg:
+            raise HTTPException(409, msg) from e
+        raise HTTPException(503, msg) from e
     return await get_operator_cfg(x_admin_agent_secret=x_admin_agent_secret)
 
 
@@ -381,8 +384,11 @@ async def put_operator_cfg(
             expected_version=body.expected_version,
             updated_by=body.updated_by or "operator",
         )
-    except Exception as e:
-        raise HTTPException(409, str(e)) from e
+    except RuntimeError as e:
+        msg = str(e)
+        if "version conflict" in msg:
+            raise HTTPException(409, msg) from e
+        raise HTTPException(503, msg) from e
     return {
         "version": op.version,
         "system_append": op.system_append,
@@ -394,5 +400,5 @@ async def put_operator_cfg(
         "history_min_recent": op.history_min_recent,
         "env_model_default": cfg.OPENROUTER_MODEL,
         "env_max_tool_rounds_cap": cfg.MAX_TOOL_ROUNDS,
-        "store": "postgres",
+        "store": "postgres" if cfg.AGENT_DB_DSN else "none",
     }

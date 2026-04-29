@@ -436,11 +436,41 @@ class AdminAsistenteController extends AbstractController
             return new JsonResponse(array(
                 'error' => 'agent_http_error',
                 'http_status' => $fetch['status'],
-                'detail' => substr($fetch['body'], 0, 500),
+                'detail' => $this->flattenAgentHttpErrorBody((string) $fetch['body']),
             ), 502);
         }
 
         return null;
+    }
+
+    private function flattenAgentHttpErrorBody(string $raw): string
+    {
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return strlen($raw) > 2000 ? substr($raw, 0, 2000) : $raw;
+        }
+        if (array_key_exists('detail', $decoded)) {
+            $d = $decoded['detail'];
+            if (is_string($d)) {
+                $t = trim($d);
+                if ($t !== '' && ('{' === $t[0] || '[' === $t[0])) {
+                    $inner = json_decode($d, true);
+                    if (is_array($inner) && isset($inner['detail']) && is_string($inner['detail'])) {
+                        return $inner['detail'];
+                    }
+                }
+
+                return $d;
+            }
+            if (is_array($d)) {
+                return json_encode($d);
+            }
+        }
+        if (isset($decoded['message']) && is_string($decoded['message'])) {
+            return $decoded['message'];
+        }
+
+        return strlen($raw) > 2000 ? substr($raw, 0, 2000) : $raw;
     }
 
     private function isAgentPageUnlocked(Request $request): bool
