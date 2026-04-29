@@ -126,10 +126,13 @@ BEGIN
     END LOOP;
 END$$;
 
--- Per-statement timeout for any session as agent_ro (cap at 60s; the tool also
--- enforces a per-call SET statement_timeout that may be shorter).
-ALTER ROLE agent_ro SET statement_timeout = '60s';
-ALTER ROLE agent_ro SET idle_in_transaction_session_timeout = '30s';
-ALTER ROLE agent_ro SET log_statement = 'none';
+-- ALTER ROLE agent_ro requiere ser superusuario o tener CREATEROLE con ADMIN OPTION
+-- en ese rol. El usuario de deploy (AGENT_DB_ADMIN_DSN) suele no tenerlo → no ejecutar aquí.
+-- sql_execute ya hace SET statement_timeout por conexión en Python.
+-- Si quieres límites por defecto en el rol, ejecuta a mano como postgres:
+--   ALTER ROLE agent_ro SET statement_timeout = '60s';
+--   ALTER ROLE agent_ro SET idle_in_transaction_session_timeout = '30s';
+--   ALTER ROLE agent_ro SET log_statement = 'none';
+-- (Opcional: migrations/manual/alter_role_agent_ro_superuser.sql)
 
 \echo '--- agent: done ---'
