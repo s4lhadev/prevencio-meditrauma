@@ -22,15 +22,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-import httpx
-from fastapi import FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
-
-import config as cfg
-import operator_config as opcfg
-import session_store
-from agent_loop import assistant_message_text, collect_agent_turn
-from codebase_index import get_index
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,8 +35,18 @@ else:
         _env_path,
     )
 
-# Re-evaluate after env load (config module captured initial values; this is a soft refresh
-# for the secret which we use for fingerprint logging at boot).
+# config (and modules that import it) must load only after .env is applied, or
+# AGENT_DB_DSN and other module-level settings stay empty forever.
+import httpx
+from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel, Field
+
+import config as cfg
+import operator_config as opcfg
+import session_store
+from agent_loop import assistant_message_text, collect_agent_turn
+from codebase_index import get_index
+
 _admin_secret = (os.getenv("ADMIN_AGENT_SECRET") or "").strip()
 if not _admin_secret:
     logger.warning(
