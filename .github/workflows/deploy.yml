@@ -58,6 +58,8 @@ jobs:
         env:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER }}
           INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+          # Opcional: sudo con contraseña sin NOPASSWD. Alternativa: VM_DEPLOY_SUDO_PASSWORD en Infisical → ~/.deploy_sudo_password (tras infisical-admin-agent-env.sh)
+          DEPLOY_SUDO_PASSWORD: ${{ secrets.DEPLOY_SUDO_PASSWORD }}
         run: |
           set -e
           sleep 15
@@ -76,4 +78,5 @@ jobs:
               "INFISICAL_TOKEN=${INFISICAL_TOKEN:-}" \
               "APP_PRODUCT_OVERRIDE=prevencion" \
               "DEPLOY_SYMFONY_CACHE_STAMP=${{ github.run_id }}" \
+              "DEPLOY_SUDO_PASSWORD=${DEPLOY_SUDO_PASSWORD:-}" \
             bash -s "$P" "$REPO" "$BR" < .github/scripts/remote-deploy.sh

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Con INFISICAL_TOKEN: exporta secrets → admin_agent/.env y fusiona ADMIN_AGENT_* en Symfony (.env).
+# Con INFISICAL_TOKEN: exporta secrets → portal/admin_agent/.env y fusiona ADMIN_AGENT_* en Symfony (.env).
+# Machine identity: exporta INFISICAL_PROJECT_ID (UUID) para --projectId en el CLI (paridad Medisalut).
+# VM_DEPLOY_SUDO_PASSWORD: se vuelca a ~/.deploy_sudo_password y se elimina del .env del agente (uvicorn no la carga).
 # Sin token: conserva admin_agent/.env en disco y hace esa misma fusión (evita 401 si PHP ≠ Python).
 # APP_PRODUCT_OVERRIDE: workflow (medisalut / prevencion).
 # No exige sudo: npx, binario en ~/.local/bin, o apt si sudo -n.
@@ -201,21 +203,26 @@ ensure_infisical() {
 
 ensure_infisical
 export INFISICAL_TOKEN
+# Machine identity: CLI exige --projectId (o variable en versiones recientes). Paridad con medisalut/.github/scripts/infisical-admin-agent-env.sh
+infisical_project_args=()
+if [ -n "${INFISICAL_PROJECT_ID:-}" ]; then
+  infisical_project_args+=(--projectId "$INFISICAL_PROJECT_ID")
+fi
 rm -f "$OUT"
 set +e
 ok=0
 for ENV_NAME in $ENV_CANDIDATES; do
-  run_infisical export --env="$ENV_NAME" --format=dotenv --output-file="$OUT" --token="$INFISICAL_TOKEN" 2>/dev/null
+  run_infisical export --env="$ENV_NAME" --format=dotenv --output-file="$OUT" --token="$INFISICAL_TOKEN" "${infisical_project_args[@]}" 2>/dev/null
   if [ -s "$OUT" ]; then ok=1; break; fi
   rm -f "$OUT"
-  (cd "$REPO_ROOT/$AGENT_SUB" && run_infisical run --env="$ENV_NAME" --command="env" > "$OUT" 2>/dev/null)
+  (cd "$REPO_ROOT/$AGENT_SUB" && run_infisical run --env="$ENV_NAME" --command="env" "${infisical_project_args[@]}" > "$OUT" 2>/dev/null)
   if [ -s "$OUT" ]; then ok=1; break; fi
   rm -f "$OUT"
 done
 set -e
 
 if [ "$ok" -ne 1 ] || [ ! -s "$OUT" ]; then
-  echo "ERROR: no se pudo generar $OUT (token o slug de entorno production / prod en Infisical)." >&2
+  echo "ERROR: no se pudo generar $OUT (revisa INFISICAL_TOKEN, INFISICAL_PROJECT_ID si usas machine identity, y slug production/prod)." >&2
   exit 1
 fi
 
@@ -225,6 +232,28 @@ if [ -n "${APP_PRODUCT_OVERRIDE:-}" ]; then
   mv "$tmp" "$OUT"
   echo "APP_PRODUCT=$APP_PRODUCT_OVERRIDE" >> "$OUT"
 fi
+
+# Contraseña sudo solo para remote-deploy: no dejar en admin_agent/.env (uvicorn la cargaría en el proceso).
+_extract_vm_deploy_sudo_password() {
+  local line v tmp
+  line=$(grep -m1 -iE '^[[:space:]]*VM_DEPLOY_SUDO_PASSWORD[[:space:]]*=' "$OUT" 2>/dev/null || true)
+  [ -n "$line" ] || return 0
+  v="${line#*=}"
+  v="${v%\"}"
+  v="${v#\"}"
+  v="${v%\'}"
+  v="${v#\'}"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  [ -n "$v" ] || return 0
+  printf '%s\n' "$v" >"${HOME}/.deploy_sudo_password"
+  chmod 600 "${HOME}/.deploy_sudo_password" 2>/dev/null || true
+  tmp="${OUT}.__nosudo__"
+  grep -viE '^[[:space:]]*VM_DEPLOY_SUDO_PASSWORD[[:space:]]*=' "$OUT" >"$tmp" 2>/dev/null || : >"$tmp"
+  mv "$tmp" "$OUT"
+  echo "OK VM_DEPLOY_SUDO_PASSWORD → ${HOME}/.deploy_sudo_password (eliminada de $OUT)" >&2
+}
+_extract_vm_deploy_sudo_password
 
 _sync_symfony_admin_keys_from_agent_env
 echo "OK Infisical → $OUT"

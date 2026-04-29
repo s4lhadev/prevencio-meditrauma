@@ -29,6 +29,91 @@ export DEPLOY_SYMFONY_CACHE_STAMP
 
 WEB_USER="${DEPLOY_WEB_USER:-www-data}"
 
+# sudo: NOPASSWD, o DEPLOY_SUDO_PASSWORD (GitHub Actions), o VM_DEPLOY_SUDO_PASSWORD en Infisical
+# (infisical-admin-agent-env.sh → ~/.deploy_sudo_password tras el export), o ~/.deploy_sudo_password (chmod 600).
+# Paridad con medisalut/.github/scripts/remote-deploy.sh
+_deploy_sudo_resolve_pass() {
+  if [ -n "${DEPLOY_SUDO_PASSWORD:-}" ]; then
+    printf '%s' "$DEPLOY_SUDO_PASSWORD"
+    return 0
+  fi
+  if [ -f "${HOME}/.deploy_sudo_password" ]; then
+    local line
+    IFS= read -r line <"${HOME}/.deploy_sudo_password" || return 1
+    printf '%s' "${line//$'\r'/}"
+    return 0
+  fi
+  return 1
+}
+deploy_sudo() {
+  local pass
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "ERROR: sudo no instalado" >&2
+    return 1
+  fi
+  pass=""
+  if pass=$(_deploy_sudo_resolve_pass); then
+    :
+  else
+    pass=""
+  fi
+  if [ -n "$pass" ]; then
+    printf '%s\n' "$pass" | sudo -S -p '' "$@"
+    return $?
+  fi
+  if sudo -n true 2>/dev/null; then
+    sudo -n "$@"
+    return $?
+  fi
+  echo "ERROR: sudo requiere contraseña. Opciones: NOPASSWD; secret DEPLOY_SUDO_PASSWORD en GitHub; VM_DEPLOY_SUDO_PASSWORD en Infisical; ~/.deploy_sudo_password (600)." >&2
+  return 1
+}
+deploy_sudo_try() {
+  local pass
+  if ! command -v sudo >/dev/null 2>&1; then
+    return 1
+  fi
+  pass=""
+  if pass=$(_deploy_sudo_resolve_pass); then
+    :
+  else
+    pass=""
+  fi
+  if [ -n "$pass" ]; then
+    printf '%s\n' "$pass" | sudo -S -p '' "$@"
+    return $?
+  fi
+  if sudo -n true 2>/dev/null; then
+    sudo -n "$@"
+    return $?
+  fi
+  return 1
+}
+# Escribe stdin al fichero con sudo (evita conflicto: sudo -S + heredoc directo).
+_deploy_sudo_tee() {
+  local file="$1" pass
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "ERROR: sudo no instalado" >&2
+    return 1
+  fi
+  pass=""
+  if pass=$(_deploy_sudo_resolve_pass); then
+    :
+  else
+    pass=""
+  fi
+  if [ -n "$pass" ]; then
+    { printf '%s\n' "$pass"; cat; } | sudo -S -p '' tee "$file" >/dev/null
+    return "${PIPESTATUS[1]}"
+  fi
+  if sudo -n true 2>/dev/null; then
+    cat | sudo -n tee "$file" >/dev/null
+    return "${PIPESTATUS[1]}"
+  fi
+  echo "ERROR: sudo requiere contraseña (escribir $file)." >&2
+  return 1
+}
+
 # secure_path de sudo a veces no incluye chown; 99-prevencion-deploy lista /usr/bin/chown y /bin/chown explícitos.
 # Con DEPLOY_SUDO_DEBUG=1 (variable en el paso SSH del workflow) se imprime sudo -l si falla.
 _deploy_sudo_chown_r() {
@@ -38,16 +123,16 @@ _deploy_sudo_chown_r() {
   local _ch
   for _ch in /usr/bin/chown /bin/chown; do
     [ -x "$_ch" ] || continue
-    if sudo -n "$_ch" -R "$ug" "$target" 2>/dev/null; then
+    if deploy_sudo_try "$_ch" -R "$ug" "$target" 2>/dev/null; then
       return 0
     fi
   done
-  if sudo -n chown -R "$ug" "$target" 2>/dev/null; then
+  if deploy_sudo_try chown -R "$ug" "$target" 2>/dev/null; then
     return 0
   fi
   if [ "${DEPLOY_SUDO_DEBUG:-}" = 1 ]; then
     echo "DEPLOY_SUDO_DEBUG: sudo -l (comprueba NOPASSWD y rutas de chown)" >&2
-    sudo -n -l 2>&1 | head -40 >&2 || true
+    deploy_sudo_try -l 2>&1 | head -40 >&2 || sudo -n -l 2>&1 | head -40 >&2 || true
   fi
   return 1
 }
@@ -58,18 +143,18 @@ _sudo_repair_dir_group_writable() {
   local root="$1"
   [ -d "$root" ] || return 0
   command -v sudo >/dev/null 2>&1 || return 1
-  if ! sudo -n find "$root" -xdev -type d -exec chmod 2775 {} + 2>/dev/null; then
+  if ! deploy_sudo_try find "$root" -xdev -type d -exec chmod 2775 {} + 2>/dev/null; then
     return 1
   fi
-  sudo -n find "$root" -xdev -type f -exec chmod 664 {} + 2>/dev/null || true
+  deploy_sudo_try find "$root" -xdev -type f -exec chmod 664 {} + 2>/dev/null || true
   local _cg
   for _cg in /usr/bin/chgrp /bin/chgrp; do
     [ -x "$_cg" ] || continue
-    if sudo -n "$_cg" -R "$WEB_USER" "$root" 2>/dev/null; then
+    if deploy_sudo_try "$_cg" -R "$WEB_USER" "$root" 2>/dev/null; then
       return 0
     fi
   done
-  sudo -n chgrp -R "$WEB_USER" "$root" 2>/dev/null
+  deploy_sudo_try chgrp -R "$WEB_USER" "$root" 2>/dev/null
 }
 
 # Caché del kernel: .symfony-cache/run-<STAMP>/ + APP_CACHE_DIR en .env (STAMP único → dir vacío sin sudo rm).
@@ -404,7 +489,7 @@ _chown_ug() {
   find "$p" -xdev -user "$U" -exec chown -h "$U:$WEB_USER" {} + 2>/dev/null || true
   chown -R "$U:$WEB_USER" "$p" 2>/dev/null || true
   if command -v sudo >/dev/null 2>&1; then
-    sudo -n chown -R "$U:$WEB_USER" "$p" 2>/dev/null || true
+    deploy_sudo_try chown -R "$U:$WEB_USER" "$p" 2>/dev/null || true
   fi
   return 0
 }
@@ -414,8 +499,8 @@ _chmod_ug_dir() {
   find "$p" -type d -exec chmod 2775 {} \; 2>/dev/null || true
   find "$p" -type f -exec chmod 664 {} \; 2>/dev/null || true
   if command -v sudo >/dev/null 2>&1; then
-    sudo -n find "$p" -type d -exec chmod 2775 {} \; 2>/dev/null || true
-    sudo -n find "$p" -type f -exec chmod 664 {} \; 2>/dev/null || true
+    deploy_sudo_try find "$p" -type d -exec chmod 2775 {} \; 2>/dev/null || true
+    deploy_sudo_try find "$p" -type f -exec chmod 664 {} \; 2>/dev/null || true
   fi
 }
 if getent group "$WEB_USER" >/dev/null 2>&1; then
@@ -438,16 +523,16 @@ _admin_agent_unit_install_and_restart() {
     rendered="$(mktemp)"
     sed "s#/home/administrador/prevencio/prevencio-meditrauma/portal/admin_agent#${agent_dir}#g; s#^User=.*#User=${U_PRE}#; s#^Group=.*#Group=${WEB_USER}#" "$unit_src" > "$rendered"
     if [ ! -f "$unit_dst" ] || ! cmp -s "$rendered" "$unit_dst"; then
-      if sudo -n install -m 0644 -o root -g root "$rendered" "$unit_dst" 2>/dev/null; then
-        sudo -n systemctl daemon-reload 2>/dev/null || true
-        sudo -n systemctl enable prevencion-admin-agent 2>/dev/null || true
+      if deploy_sudo_try install -m 0644 -o root -g root "$rendered" "$unit_dst" 2>/dev/null; then
+        deploy_sudo_try systemctl daemon-reload 2>/dev/null || true
+        deploy_sudo_try systemctl enable prevencion-admin-agent 2>/dev/null || true
         echo "OK: unit prevencion-admin-agent instalada/actualizada en $unit_dst" >&2
       else
         echo "Aviso: sudo install de la unit fallo (NOPASSWD?); seguire con fallback manual." >&2
       fi
     fi
     rm -f "$rendered"
-    if sudo -n systemctl restart prevencion-admin-agent 2>/dev/null; then
+    if deploy_sudo_try systemctl restart prevencion-admin-agent 2>/dev/null; then
       echo "OK: prevencion-admin-agent reiniciado (recarga .env)." >&2
       return 0
     fi
@@ -501,13 +586,13 @@ for _app in "$TOP/current" "$TOP/portal"; do
   find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
   find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
   if command -v sudo >/dev/null 2>&1; then
-    sudo -n find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
-    sudo -n find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
+    deploy_sudo_try find "$_app" -type d -exec chmod 2775 {} \; 2>/dev/null || true
+    deploy_sudo_try find "$_app" -type f -exec chmod 664 {} \; 2>/dev/null || true
   fi
   for _f in "$_app/.env" "$_app/.env.local" "$_app/.env.local.php"; do
     [ -f "$_f" ] || continue
     chgrp "$WEB_USER" "$_f" 2>/dev/null && chmod 640 "$_f" 2>/dev/null || true
-    sudo -n chgrp "$WEB_USER" "$_f" 2>/dev/null && sudo -n chmod 640 "$_f" 2>/dev/null || true
+    deploy_sudo_try chgrp "$WEB_USER" "$_f" 2>/dev/null && deploy_sudo_try chmod 640 "$_f" 2>/dev/null || true
   done
 done
 if [ -d "$TOP/var" ]; then

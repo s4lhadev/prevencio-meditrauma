@@ -9,13 +9,17 @@ Misma idea que en Medisalut: el runner entra al tailnet, luego **SSH** a la VM (
 | `TAILSCALE_AUTHKEY` | `tskey-auth-...` (o usa OAuth con tags, ver [tailscale/github-action](https://github.com/tailscale/github-action)) |
 | `DEPLOY_HOST` | IP o hostname en Tailscale (p. ej. `100.77.237.64`) |
 | `DEPLOY_SSH_PRIVATE_KEY` | Clave **privada** (completa, sin contraseña en el fichero; ver sección SSH en `medisalut/.github/CICD-SETUP.md` si falla *libcrypto*) |
-| `INFISICAL_TOKEN` | Service token de Infisical (entorno **Production**) | Opcional. Sin él, no se regenera `portal/admin_agent/.env` |
+| `INFISICAL_TOKEN` | Service token de Infisical (entorno **Production**). Opcional: sin él no se regenera `portal/admin_agent/.env`. |
+| `INFISICAL_PROJECT_ID` | UUID del proyecto Infisical (machine identity / `--projectId`). Opcional: export en la VM o variable; `infisical-admin-agent-env.sh` lo usa como en Medisalut. |
+| `DEPLOY_SUDO_PASSWORD` | Contraseña sudo del usuario de deploy. Opcional: NOPASSWD en `sudoers`, o **`VM_DEPLOY_SUDO_PASSWORD`** en Infisical (el script escribe `~/.deploy_sudo_password` y la quita del `.env` del agente). |
 
 **`DEPLOY_PATH` y `DEPLOY_USER`:** en *Secrets* **o** en *Variables* (mismo nombre). Si solo los tienes en *Secrets*, el workflow los usa (antes solo se leía la pestaña *Variables*).
 
 **Clave `/agent`:** define `ADMIN_AGENT_PAGE_KEY` en el `.env` del despliegue (mismo concepto que `admin_agent.page_key` en Symfony). Formulario de acceso independiente del login; `php bin/console cache:clear --env=prod` tras cambiar.
 
-**Infisical:** solo hace falta el token. Tras el export fuerza `APP_PRODUCT=prevencion`. Mismo orden de instalación del CLI que en `medisalut` (`npx` → `~/.local/bin` → `apt` con `sudo -n`).
+**Infisical:** con token, el export usa los slugs `production` / `prod` y acepta **`INFISICAL_PROJECT_ID`** en el entorno (paridad Medisalut). Tras generar `portal/admin_agent/.env`, si existe **`VM_DEPLOY_SUDO_PASSWORD`**, se mueve a **`~/.deploy_sudo_password`** (600) para que `remote-deploy.sh` pueda usar `sudo -S` sin dejar la clave en el `.env` de uvicorn. Opcional: secret GitHub **`DEPLOY_SUDO_PASSWORD`** en el job de deploy (misma semántica que Medisalut).
+
+Tras el export fuerza `APP_PRODUCT=prevencion`. Mismo orden de instalación del CLI que en `medisalut` (`npx` → `~/.local/bin` → `apt` con `sudo -n`).
 
 En el **mismo** proyecto/entorno de Infisical que inyecta `portal/admin_agent/.env` (p. ej. `production` o `prod`), el nombre de la clave **debe** coincidir: `ADMIN_AGENT_INTERNAL_URL`, `ADMIN_AGENT_SECRET`, `ADMIN_AGENT_PAGE_KEY` (y lo que tenga el Python). Si `ADMIN_AGENT_PAGE_KEY` no existe o está vacía, Symfony se queda con valor vacío y verás *Falta ADMIN_AGENT_PAGE_KEY*; el script intenta rellenarla desde `current/.env.dist` si el fichero `current/.env` o `portal/.env` **existía o se crea copiando** `.env.dist` cuando faltan (p. ej. primer deploy). Comprueba en la VM, tras un deploy, que `current/.env` tenga `ADMIN_AGENT_PAGE_KEY=…` (no vacío) y que en GitHub *Actions* el secret `INFISICAL_TOKEN` esté definido y sea del proyecto correcto.
 
