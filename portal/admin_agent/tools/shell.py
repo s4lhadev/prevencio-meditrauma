@@ -17,9 +17,9 @@ SCHEMA: Dict[str, Any] = {
     "function": {
         "name": "run_shell",
         "description": (
-            "Non-interactive shell as the **OS user** running uvicorn. For privileged commands, "
-            "use **`sudo -n …`** when the host has passwordless sudo configured for that user "
-            "(see DEPLOY.md). No TTY — interactive sudo will hang or fail. "
+            "Non-interactive shell as the **OS user** running uvicorn. For **`sudo`**, with **VM_DEPLOY_SUDO_PASSWORD** "
+            "in admin_agent/.env the tool wraps **`sudo -S`**; otherwise use **`sudo -n …`** when the host has NOPASSWD. "
+            "No TTY. "
             f"Timeout {cfg.SHELL_TIMEOUT_S}s, output cap {cfg.SHELL_MAX_OUTPUT} bytes. "
             "AGENT_SHELL_DISABLE=1 disables this tool. Audited."
         ),
@@ -55,7 +55,7 @@ async def run(args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
         proc = await asyncio.create_subprocess_exec(
             "bash",
             "-lc",
-            "set -o pipefail; " + cmd,
+            cfg.bash_lc_with_optional_sudo_shim(cmd),
             cwd=cwd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,

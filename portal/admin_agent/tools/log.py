@@ -97,12 +97,21 @@ async def _journal(unit: str, lines: int, grep: str) -> Dict[str, Any]:
         return {"error": "journalctl timed out"}
     text = (out_b or b"").decode("utf-8", errors="replace")
     if "permission" in text.lower() or proc.returncode != 0:
-        # Retry with sudo -n
-        proc2 = await asyncio.create_subprocess_shell(
-            "sudo -n " + cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
+        # Retry with sudo: password via VM_DEPLOY_SUDO_PASSWORD or NOPASSWD (-n).
+        if cfg.VM_DEPLOY_SUDO_PASSWORD:
+            proc2 = await asyncio.create_subprocess_exec(
+                "bash",
+                "-lc",
+                cfg.bash_lc_with_optional_sudo_shim("sudo " + cmd),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+        else:
+            proc2 = await asyncio.create_subprocess_shell(
+                "sudo -n " + cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
         try:
             out_b2, _ = await asyncio.wait_for(proc2.communicate(), timeout=30.0)
         except asyncio.TimeoutError:

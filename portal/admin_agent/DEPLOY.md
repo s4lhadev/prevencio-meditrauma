@@ -22,11 +22,16 @@ El proxy PHP envía `X-Admin-Agent-Secret` en cada `POST` al servicio local. Sin
 
 ## Privilegios en la VM (`run_shell` + `sudo`)
 
-El agente **no** puede recibir tu contraseña de `sudo` por el chat (ni debe hacerlo). Para
-que pueda ejecutar órdenes elevadas **sin interacción**, hay que configurar el **mismo usuario**
+### Opción A — Contraseña vía Infisical (elevación amplia)
+
+Si en Infisical defines **`VM_DEPLOY_SUDO_PASSWORD`** (mismo proyecto/entorno que vuelca `admin_agent/.env`), el deploy la copia a **`~/.deploy_sudo_password`** y **la deja en el `.env` del agente**. El servicio Python usará **`sudo -S`** en `run_shell` y en lecturas `journal:` de `read_log` cuando haga falta. **Riesgo:** el modelo + APIs externas pueden ejecutar órdenes como root; la contraseña vive en memoria y en el fichero `.env` del agente.
+
+### Opción B — `sudo` sin contraseña (NOPASSWD)
+
+Para que pueda ejecutar órdenes elevadas **sin contraseña en el agente**, configura el **mismo usuario**
 que en la unidad `systemd` (p. ej. `User=administrador`).
 
-### Opción A — `sudo` sin contraseña (lo habitual para automatización)
+#### B.1 — NOPASSWD amplio
 
 Como root, edita sudoers de forma segura:
 
@@ -48,9 +53,9 @@ Comprueba:
 sudo -n true && echo OK
 ```
 
-En `run_shell` el modelo debe preferir **`sudo -n comando`** para no bloquearse en un prompt.
+Con **NOPASSWD**, en `run_shell` conviene **`sudo -n comando`**. Con **VM_DEPLOY_SUDO_PASSWORD**, puedes usar **`sudo comando`** (el agente envuelve `sudo -S`).
 
-### Opción B — Solo `NOPASSWD` para binarios concretos (más seguro)
+### Opción B.2 — Solo `NOPASSWD` para binarios concretos (más seguro)
 
 Restringe a rutas absolutas, p. ej. `ss`, `systemctl`, `journalctl`:
 

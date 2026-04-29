@@ -233,9 +233,10 @@ if [ -n "${APP_PRODUCT_OVERRIDE:-}" ]; then
   echo "APP_PRODUCT=$APP_PRODUCT_OVERRIDE" >> "$OUT"
 fi
 
-# Contraseña sudo solo para remote-deploy: no dejar en admin_agent/.env (uvicorn la cargaría en el proceso).
+# Contraseña sudo: copia a ~/.deploy_sudo_password (remote-deploy) y se conserva en admin_agent/.env
+# para que uvicorn/run_shell puedan usar sudo -S (riesgo: secreto en proceso + fichero .env del agente).
 _extract_vm_deploy_sudo_password() {
-  local line v tmp
+  local line v
   line=$(grep -m1 -iE '^[[:space:]]*VM_DEPLOY_SUDO_PASSWORD[[:space:]]*=' "$OUT" 2>/dev/null || true)
   [ -n "$line" ] || return 0
   v="${line#*=}"
@@ -248,10 +249,7 @@ _extract_vm_deploy_sudo_password() {
   [ -n "$v" ] || return 0
   printf '%s\n' "$v" >"${HOME}/.deploy_sudo_password"
   chmod 600 "${HOME}/.deploy_sudo_password" 2>/dev/null || true
-  tmp="${OUT}.__nosudo__"
-  grep -viE '^[[:space:]]*VM_DEPLOY_SUDO_PASSWORD[[:space:]]*=' "$OUT" >"$tmp" 2>/dev/null || : >"$tmp"
-  mv "$tmp" "$OUT"
-  echo "OK VM_DEPLOY_SUDO_PASSWORD → ${HOME}/.deploy_sudo_password (eliminada de $OUT)" >&2
+  echo "OK VM_DEPLOY_SUDO_PASSWORD → ${HOME}/.deploy_sudo_password (también en $OUT para el agente)" >&2
 }
 _extract_vm_deploy_sudo_password
 

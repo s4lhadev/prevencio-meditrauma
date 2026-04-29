@@ -113,6 +113,19 @@ SHELL_DISABLED = _env_bool("AGENT_SHELL_DISABLE", default=False)
 SHELL_TIMEOUT_S = _env_int("AGENT_SHELL_TIMEOUT_S", 180)
 SHELL_MAX_OUTPUT = _env_int("AGENT_SHELL_MAX_OUTPUT", 1_500_000)
 
+VM_DEPLOY_SUDO_PASSWORD = (os.getenv("VM_DEPLOY_SUDO_PASSWORD") or "").strip()
+
+
+def bash_lc_with_optional_sudo_shim(user_command: str) -> str:
+    """Fragmento para `bash -lc`: hace que `sudo` use contraseña por stdin si VM_DEPLOY_SUDO_PASSWORD está en el entorno."""
+    base = "set -o pipefail; " + user_command
+    if not VM_DEPLOY_SUDO_PASSWORD:
+        return base
+    return (
+        "sudo() { printf '%s\\n' \"$VM_DEPLOY_SUDO_PASSWORD\" | command sudo -S \"$@\"; }; "
+        + base
+    )
+
 
 # --- log allowlist --------------------------------------------------------------------
 def _default_log_paths() -> dict:

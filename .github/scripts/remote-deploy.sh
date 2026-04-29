@@ -30,7 +30,7 @@ export DEPLOY_SYMFONY_CACHE_STAMP
 WEB_USER="${DEPLOY_WEB_USER:-www-data}"
 
 # sudo: NOPASSWD, o DEPLOY_SUDO_PASSWORD (GitHub Actions), o VM_DEPLOY_SUDO_PASSWORD en Infisical
-# (infisical-admin-agent-env.sh → ~/.deploy_sudo_password tras el export), o ~/.deploy_sudo_password (chmod 600).
+# (infisical → ~/.deploy_sudo_password y opcionalmente en admin_agent/.env para el agente), o ~/.deploy_sudo_password (chmod 600).
 # Paridad con medisalut/.github/scripts/remote-deploy.sh
 _deploy_sudo_resolve_pass() {
   if [ -n "${DEPLOY_SUDO_PASSWORD:-}" ]; then
