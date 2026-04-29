@@ -53,7 +53,41 @@ TEXT_CHUNK_SIZE = 16  # SSE chunk size (chars)
 
 
 # --- sql ------------------------------------------------------------------------------
-AGENT_DB_DSN = (os.getenv("AGENT_DB_DSN") or "").strip()
+def _read_agent_db_dsn_from_dotenv_file() -> str:
+    """Si load_dotenv no pobló os.environ (clave ausente, formato raro), último recurso: leer el .env junto a este módulo."""
+    p = Path(__file__).resolve().parent / ".env"
+    if not p.is_file():
+        return ""
+    try:
+        raw = p.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        return ""
+    candidates = (
+        "AGENT_DB_DSN",
+        "AGENT_DATABASE_DSN",  # alias posible en Infisical / otros equipos
+    )
+    for line in raw.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if s.lower().startswith("export "):
+            s = s[7:].strip()
+        if "=" not in s:
+            continue
+        key, _, rhs = s.partition("=")
+        key = key.strip().replace("\ufeff", "")
+        if key not in candidates:
+            continue
+        v = rhs.strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]
+        return v.strip()
+    return ""
+
+
+_env_ag = (os.getenv("AGENT_DB_DSN") or "").strip()
+_env_alias = (os.getenv("AGENT_DATABASE_DSN") or "").strip()
+AGENT_DB_DSN = _env_ag or _env_alias or _read_agent_db_dsn_from_dotenv_file()
 SQL_STATEMENT_TIMEOUT_S = _env_int("AGENT_SQL_TIMEOUT_S", 30)
 MAX_SQL_ROWS = _env_int("AGENT_MAX_SQL_ROWS", 200)
 SCHEMA_DIGEST_TTL_S = _env_int("AGENT_SCHEMA_DIGEST_TTL_S", 300)

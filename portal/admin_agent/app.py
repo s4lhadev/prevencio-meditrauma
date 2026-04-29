@@ -27,6 +27,67 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 _env_path = Path(__file__).resolve().parent / ".env"
+
+
+def _log_agent_env_diagnostics(dotenv_path: Path) -> None:
+    """Sin volcar secretos: ayuda cuando Infisical/deploy no deja AGENT_DB_DSN efectivo."""
+    if not dotenv_path.is_file():
+        return
+    try:
+        raw = dotenv_path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError as e:
+        logger.warning("admin_agent: no se puede leer %s (%s); el usuario del servicio ¿permiso?", dotenv_path, e)
+        return
+    found_line = False
+    value_non_empty = False
+    for line in raw.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if s.lower().startswith("export "):
+            s = s[7:].strip()
+        if s.startswith("AGENT_DB_DSN=") or s.startswith("AGENT_DATABASE_DSN="):
+            found_line = True
+            _, _, rhs = s.partition("=")
+            v = rhs.strip().strip('"').strip("'")
+            value_non_empty = bool(v)
+            break
+    dsn_after_dotenv = bool((os.getenv("AGENT_DB_DSN") or "").strip() or (os.getenv("AGENT_DATABASE_DSN") or "").strip())
+    logger.info(
+        "admin_agent .env path=%s size=%s AGENT_DB_DSN line in file=%s file value non-empty=%s "
+        "os.environ after load_dotenv=%s",
+        dotenv_path,
+        len(raw),
+        found_line,
+        value_non_empty if found_line else None,
+        dsn_after_dotenv,
+    )
+    if found_line and value_non_empty and not dsn_after_dotenv:
+        logger.error(
+            "admin_agent: .env declares AGENT_DB_DSN pero load_dotenv no la aplicó "
+            "(¿línea rota, comillas mal, o variable AGENT_DB_DSN vacía también en el proceso?)."
+        )
+    if not found_line:
+        keys = []
+        for line in raw.splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or "=" not in s:
+                continue
+            if s.lower().startswith("export "):
+                s = s[7:].strip()
+            k = s.split("=", 1)[0].strip().replace("\ufeff", "")
+            if k and k not in keys:
+                keys.append(k)
+        keys.sort()
+        preview = ", ".join(keys[:35]) + ("…" if len(keys) > 35 else "")
+        logger.warning(
+            "admin_agent: no hay AGENT_DB_DSN= en %s; añádela en Infisical (clave exacta AGENT_DB_DSN) "
+            "o alias AGENT_DATABASE_DSN. Claves presentes en .env (solo nombres): %s",
+            dotenv_path,
+            preview or "(ninguna con formato KEY=)",
+        )
+
+
 if _env_path.is_file():
     load_dotenv(_env_path, override=True)
 else:
@@ -34,6 +95,8 @@ else:
         "Missing %s — relying on process environment (systemd EnvironmentFile, export, etc.)",
         _env_path,
     )
+
+_log_agent_env_diagnostics(_env_path)
 
 # config (and modules that import it) must load only after .env is applied, or
 # AGENT_DB_DSN and other module-level settings stay empty forever.
