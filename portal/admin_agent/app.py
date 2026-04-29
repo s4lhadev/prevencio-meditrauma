@@ -55,6 +55,8 @@ if not _admin_secret:
 else:
     logger.info("ADMIN_AGENT_SECRET loaded (%s)", cfg.secret_fingerprint(_admin_secret))
 
+logger.info("AGENT_DB_DSN configured in process=%s", bool(cfg.AGENT_DB_DSN))
+
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
