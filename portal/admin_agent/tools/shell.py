@@ -1,4 +1,4 @@
-"""run_shell: subprocess local on the VM. Tier 'dev' only. Kill switch via env."""
+"""run_shell: subprocess on the VM as the service user. All tiers (full host access as that user). Kill switch via env."""
 from __future__ import annotations
 
 import asyncio
@@ -85,4 +85,4 @@ async def run(args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
     }
 
 
-register(Tool(name="run_shell", schema=SCHEMA, run=run, tier="dev"))
+register(Tool(name="run_shell", schema=SCHEMA, run=run, tier="user"))

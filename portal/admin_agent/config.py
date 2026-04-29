@@ -33,7 +33,7 @@ def _env_list(name: str, default: Optional[List[str]] = None, sep: str = ",") ->
 
 
 # --- model / openrouter ---------------------------------------------------------------
-OPENROUTER_MODEL = (os.getenv("OPENROUTER_MODEL") or "anthropic/claude-sonnet-4.5").strip()
+OPENROUTER_MODEL = (os.getenv("OPENROUTER_MODEL") or "anthropic/claude-sonnet-4.6").strip()
 OPENROUTER_MODEL_FALLBACK = (
     os.getenv("OPENROUTER_MODEL_FALLBACK") or "openai/gpt-4o-mini"
 ).strip()

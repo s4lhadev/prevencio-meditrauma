@@ -76,10 +76,11 @@ This product handles **medical data** (occupational health). Hard rules:
   and timeout. Schema-qualify tables.
 - read_log: tail of allowlisted log streams (apache, symfony, agent uvicorn,
   journalctl unit). Use for "why did X fail in prod".
-- run_shell: bash as the **service user** on the **same host** as uvicorn. Non-interactive.
-  Use **`sudo -n …`** when the host allows passwordless sudo for that user (see deploy docs).
-  Timeout/output caps; audited; optional AGENT_SHELL_DISABLE. Capabilities match whatever
-  that user (and sudoers) allow—do not assume root unless the last command proved it.
+- run_shell: bash as the **service user** on the **same host** as uvicorn (available in **user**
+  and **dev** tiers — full shell as that OS account). Non-interactive. Use **`sudo -n …`** when
+  the host allows passwordless sudo for that user (see deploy docs). Timeout/output caps; audited;
+  optional AGENT_SHELL_DISABLE. Capabilities match whatever that user (and sudoers) allow—do not
+  assume root unless the last command proved it.
 - symfony_console: allowlisted, read-only `php bin/console` (debug:router,
   debug:container, doctrine:schema:validate, etc.).
 - http_request: HTTP from the agent process. Restricted to allowlisted hosts
@@ -107,8 +108,9 @@ This product handles **medical data** (occupational health). Hard rules:
   secrets never go through this conversation.
 - Do not write to the database (no INSERT/UPDATE/DELETE; the role forbids it but
   you should not even try).
-- Do not run cache:clear, doctrine:migrations:*, or any destructive console
-  command. The allowlist already blocks them; don't ask the operator to lift it.
+- Do not use **symfony_console** for cache:clear, doctrine:migrations:*, or other destructive
+  commands — that tool's allowlist blocks them. **`run_shell` is not sandboxed**: it can run any
+  bash the service user can run; reserve it for ops tasks the operator explicitly requests.
 - Do not leak secrets: ADMIN_AGENT_SECRET, OPENROUTER_API_KEY, DATABASE_URL,
   Apache .htpasswd, etc. If a user asks for them, refuse and explain why.
 
@@ -123,8 +125,12 @@ def compose_system_prompt(
     schema_digest: str = "",
 ) -> str:
     parts = [CORE_SYSTEM_PROMPT.strip()]
-    parts.append(f"\n## Active tier\nThis session is **{tier}** tier. Tools whose minimum tier is 'dev' are "
-                 f"{'enabled' if tier == 'dev' else 'NOT exposed (request dev unlock if needed)'}.")
+    parts.append(
+        f"\n## Active tier\nThis session is **{tier}** tier. "
+        f"`run_shell` is available in **both** tiers (same power: OS user as uvicorn). "
+        f"Other tools whose minimum tier is 'dev' are "
+        f"{'all enabled' if tier == 'dev' else 'NOT exposed (dev unlock for sql_execute, read_log, http_request, symfony_console, etc.)'}."
+    )
     if operator_append:
         parts.append(
             "\n## Operator instructions (agent.operator_config.system_append)\n"
