@@ -17,6 +17,9 @@ class AdminAsistenteController extends AbstractController
 {
     const SESSION_PAGE_UNLOCK = 'admin_asistente_page_unlocked';
 
+    /** Igual que ChatRequest.message en portal/admin_agent (FastAPI). */
+    private const CHAT_MESSAGE_MAX_CHARS = 50000;
+
     /** Cookie con HMAC: funciona aunque falle el guardado de sesión (permisos var/sessions, proxy, etc.) */
     private const UNLOCK_COOKIE = 'admin_asistente_u';
 
@@ -113,6 +116,7 @@ class AdminAsistenteController extends AbstractController
         return $this->render('admin_asistente/index.html.twig', array(
             'assistant_configured' => $configured,
             'agent_ajax_token' => $this->agentAjaxToken(),
+            'agent_session_who' => 'prevencion-agent-ui',
         ));
     }
 
@@ -171,6 +175,7 @@ class AdminAsistenteController extends AbstractController
             'agent_replace_history' => true,
             'agent_unlock_notice' => 'Acceso al asistente activado.',
             'agent_ajax_token' => $this->agentAjaxToken(),
+            'agent_session_who' => 'prevencion-agent-ui',
         ));
         $this->addUnlockCookie($response, $request, $pageKey);
         $this->clearUnlockCsrfCookie($response, $request);
@@ -193,62 +198,151 @@ class AdminAsistenteController extends AbstractController
         if (!$this->isAgentPageUnlocked($request)) {
             return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
         }
-        $data = json_decode($request->getContent(), true);
-        if (!is_array($data)) {
-            return new JsonResponse(array('error' => 'invalid_json'), 400);
-        }
-        if (!isset($data['_token']) || !$this->isValidAgentAjaxToken((string) $data['_token'])) {
-            return new JsonResponse(array('error' => 'csrf'), 400);
-        }
-        $message = isset($data['message']) ? trim((string) $data['message']) : '';
-        if ($message === '') {
-            return new JsonResponse(array('error' => 'empty_message'), 400);
-        }
-        $history = isset($data['messages']) && is_array($data['messages']) ? $data['messages'] : null;
+        try {
+            $data = json_decode($request->getContent(), true);
+            if (!is_array($data)) {
+                return new JsonResponse(array('error' => 'invalid_json'), 400);
+            }
+            if (!isset($data['_token']) || !$this->isValidAgentAjaxToken((string) $data['_token'])) {
+                return new JsonResponse(array('error' => 'csrf'), 400);
+            }
+            $message = isset($data['message']) ? trim((string) $data['message']) : '';
+            if ($message === '') {
+                return new JsonResponse(array('error' => 'empty_message'), 400);
+            }
+            if (strlen($message) > self::CHAT_MESSAGE_MAX_CHARS) {
+                return new JsonResponse(array(
+                    'error' => 'message_too_long',
+                    'detail' => 'El mensaje supera '.self::CHAT_MESSAGE_MAX_CHARS.' caracteres. Pega un extracto o resume el error.',
+                ), 400);
+            }
+            $history = isset($data['messages']) && is_array($data['messages']) ? $data['messages'] : null;
 
+            $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
+            $internalSecret = $this->adminAgentSecret();
+            if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
+                return new JsonResponse(array('error' => 'agent_not_configured'), 503);
+            }
+            $url = $base.'/v1/chat';
+            $useCodebase = !isset($data['use_codebase']) || $data['use_codebase'];
+            $payload = array('message' => $message, 'use_codebase' => (bool) $useCodebase);
+            if (null !== $history) {
+                $payload['messages'] = $history;
+            }
+            $agentic = !empty($data['agentic']);
+            if ($agentic) {
+                $payload['agentic'] = true;
+                if (isset($data['session_id']) && is_string($data['session_id']) && $data['session_id'] !== '') {
+                    $payload['session_id'] = $data['session_id'];
+                }
+                if (isset($data['create_session'])) {
+                    $payload['create_session'] = (bool) $data['create_session'];
+                }
+                if (isset($data['title']) && is_string($data['title'])) {
+                    $payload['title'] = $data['title'];
+                }
+            }
+            $timeout = $agentic ? 300 : 130;
+            $header = "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\nX-Admin-Agent-Tier: user\r\nX-Admin-Agent-Who: prevencion-agent-ui\r\n";
+            if ($agentic) {
+                $header .= "X-Admin-Agent-Agentic: 1\r\n";
+            }
+            $encoded = json_encode($payload);
+            if (false === $encoded) {
+                return new JsonResponse(array(
+                    'error' => 'payload_json_failed',
+                    'detail' => 'No se pudo serializar el mensaje (¿UTF-8 inválido o demasiado grande?).',
+                ), 400);
+            }
+            $fetch = $this->fetchAdminAgent($url, array(
+                'method' => 'POST',
+                'header' => $header,
+                'content' => $encoded,
+                'timeout' => $timeout,
+            ));
+            $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?', $internalSecret);
+            if (null !== $fail) {
+                return $fail;
+            }
+            $result = $fetch['body'];
+            $decoded = json_decode($result, true);
+            if (!is_array($decoded) || !isset($decoded['reply'])) {
+                return new JsonResponse(array('error' => 'bad_response', 'raw' => substr($result, 0, 500)), 502);
+            }
+
+            return new JsonResponse($decoded, 200);
+        } catch (\Throwable $e) {
+            return new JsonResponse(array(
+                'error' => 'chat_exception',
+                'detail' => $e->getMessage(),
+            ), 500);
+        }
+    }
+
+    public function sessionsList(Request $request): JsonResponse
+    {
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
+        }
         $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
         $internalSecret = $this->adminAgentSecret();
         if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
             return new JsonResponse(array('error' => 'agent_not_configured'), 503);
         }
-        $url = $base.'/v1/chat';
-        $useCodebase = !isset($data['use_codebase']) || $data['use_codebase'];
-        $payload = array('message' => $message, 'use_codebase' => (bool) $useCodebase);
-        if (null !== $history) {
-            $payload['messages'] = $history;
+        $limit = (int) $request->query->get('limit', 50);
+        $limit = max(1, min(200, $limit));
+        $all = $request->query->get('all') === '1' || $request->query->get('all') === 'true';
+        $params = array('limit' => $limit);
+        if (!$all) {
+            $params['who'] = trim((string) $request->query->get('who', 'prevencion-agent-ui'));
         }
-        $agentic = !empty($data['agentic']);
-        if ($agentic) {
-            $payload['agentic'] = true;
-            if (isset($data['session_id']) && is_string($data['session_id']) && $data['session_id'] !== '') {
-                $payload['session_id'] = $data['session_id'];
-            }
-            if (isset($data['create_session'])) {
-                $payload['create_session'] = (bool) $data['create_session'];
-            }
-            if (isset($data['title']) && is_string($data['title'])) {
-                $payload['title'] = $data['title'];
-            }
-        }
-        $timeout = $agentic ? 300 : 130;
-        $header = "Content-Type: application/json\r\nX-Admin-Agent-Secret: ".$internalSecret."\r\nX-Admin-Agent-Tier: user\r\n";
-        if ($agentic) {
-            $header .= "X-Admin-Agent-Agentic: 1\r\n";
-        }
+        $url = $base.'/v1/sessions?'.http_build_query($params);
         $fetch = $this->fetchAdminAgent($url, array(
-            'method' => 'POST',
-            'header' => $header,
-            'content' => json_encode($payload),
-            'timeout' => $timeout,
+            'method' => 'GET',
+            'header' => "X-Admin-Agent-Secret: ".$internalSecret."\r\n",
+            'timeout' => 30,
         ));
-        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent. Is uvicorn running?', $internalSecret);
+        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent.', $internalSecret);
         if (null !== $fail) {
             return $fail;
         }
-        $result = $fetch['body'];
-        $decoded = json_decode($result, true);
-        if (!is_array($decoded) || !isset($decoded['reply'])) {
-            return new JsonResponse(array('error' => 'bad_response', 'raw' => substr($result, 0, 500)), 502);
+        $decoded = json_decode((string) $fetch['body'], true);
+        if (!is_array($decoded)) {
+            return new JsonResponse(array('error' => 'bad_response', 'raw' => substr((string) $fetch['body'], 0, 500)), 502);
+        }
+
+        return new JsonResponse($decoded, 200);
+    }
+
+    public function sessionMessages(Request $request, string $sessionId): JsonResponse
+    {
+        if (!$this->isAgentPageUnlocked($request)) {
+            return new JsonResponse(array('error' => 'forbidden', 'detail' => 'Desbloquea /agent con la clave.'), 403);
+        }
+        $sid = strtolower(trim($sessionId));
+        if ($sid === '' || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $sid)) {
+            return new JsonResponse(array('error' => 'invalid_session_id'), 400);
+        }
+        $base = rtrim((string) $this->getParameter('admin_agent.internal_url'), '/');
+        $internalSecret = $this->adminAgentSecret();
+        if ($base === '' || $internalSecret === '' || $internalSecret === 'change_me_match_admin_agent_env') {
+            return new JsonResponse(array('error' => 'agent_not_configured'), 503);
+        }
+        $lim = (int) $request->query->get('limit', 2000);
+        $lim = max(1, min(20000, $lim));
+        $url = $base.'/v1/sessions/'.$sid.'/messages?limit='.$lim;
+        $fetch = $this->fetchAdminAgent($url, array(
+            'method' => 'GET',
+            'header' => "X-Admin-Agent-Secret: ".$internalSecret."\r\n",
+            'timeout' => 60,
+        ));
+        $fail = $this->adminAgentFailureResponse($fetch, 'No response from admin_agent.', $internalSecret);
+        if (null !== $fail) {
+            return $fail;
+        }
+        $decoded = json_decode((string) $fetch['body'], true);
+        if (!is_array($decoded)) {
+            return new JsonResponse(array('error' => 'bad_response', 'raw' => substr((string) $fetch['body'], 0, 500)), 502);
         }
 
         return new JsonResponse($decoded, 200);

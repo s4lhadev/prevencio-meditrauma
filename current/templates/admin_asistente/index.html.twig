@@ -64,6 +64,15 @@
         .opgrid textarea { min-height: 72px; resize: vertical; }
         .opspan2 { grid-column: 1 / -1; }
         #opstatus { font-size: 0.8rem; color: var(--muted); margin-top: 0.45rem; min-height: 1.2em; }
+        .sess-panel .sess-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+        .sess-list { list-style: none; margin: 0.5rem 0 0; padding: 0; max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: #0d1117; }
+        .sess-list li { border-bottom: 1px solid var(--border); padding: 0.45rem 0.65rem; cursor: pointer; font-size: 0.82rem; display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
+        .sess-list li:last-child { border-bottom: none; }
+        .sess-list li:hover { background: rgba(43,182,115,0.12); }
+        .sess-list li.active { background: rgba(43,182,115,0.2); }
+        .sess-list .t { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sess-list .d { color: var(--muted); font-size: 0.72rem; flex-shrink: 0; }
+        #sessStatus { font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem; min-height: 1.1em; }
     </style>
 </head>
 <body>
@@ -143,6 +152,21 @@
         <p id="opstatus"></p>
     </div>
 
+    <div class="ix sess-panel" id="sessPanel">
+        <h2>Conversaciones guardadas</h2>
+        <p>Historial en Postgres si hay <code>AGENT_DB_DSN</code>. Elige una para ver mensajes y seguir chateando.</p>
+        <div class="sess-toolbar">
+            <button type="button" class="secondary" id="sessRefresh" {% if not assistant_configured %}disabled{% endif %}>Recargar lista</button>
+            <button type="button" id="sessNew" {% if not assistant_configured %}disabled{% endif %}>Nueva conversación</button>
+            <label style="font-size:0.8rem;color:var(--muted);display:inline-flex;align-items:center;gap:0.35rem;cursor:pointer;">
+                <input type="checkbox" id="sessAllUsers" {% if not assistant_configured %}disabled{% endif %} />
+                Ver todas (p. ej. sesiones antiguas «anon»)
+            </label>
+        </div>
+        <ul class="sess-list" id="sessList" aria-label="Lista de conversaciones"></ul>
+        <p id="sessStatus"></p>
+    </div>
+
     <div class="log" id="log" aria-live="polite"></div>
     <div class="row">
         <textarea id="input" placeholder="Pregunta lo que quieras (Shift+Enter = nueva línea)…" rows="2"></textarea>
@@ -155,11 +179,13 @@
 (function () {
     var token = {{ agent_ajax_token|json_encode|raw }};
     var cfg = {{ assistant_configured|json_encode|raw }};
+    var sessionWho = {{ agent_session_who|default('prevencion-agent-ui')|json_encode|raw }};
 
     var log = document.getElementById('log');
     var input = document.getElementById('input');
     var sendBtn = document.getElementById('send');
     var sessionId = null;
+    var VIEW_MSG_MAX = 12000;
 
     function updateSessionLabel() {
         var el = document.getElementById('sessionIdLabel');
@@ -170,6 +196,134 @@
             el.textContent = '(se crea al enviar el primer mensaje)';
         }
     }
+    function clearChatLog() {
+        while (log.firstChild) log.removeChild(log.firstChild);
+    }
+    function truncateForView(s) {
+        s = s == null ? '' : String(s);
+        if (s.length <= VIEW_MSG_MAX) return s;
+        return s.slice(0, VIEW_MSG_MAX) + '\n… (truncado en vista)';
+    }
+    function renderHistoryMessages(rows) {
+        clearChatLog();
+        (rows || []).forEach(function (m) {
+            var role = (m.role || '').toLowerCase();
+            if (role === 'system') return;
+            if (role === 'user') {
+                appendUserTurn(truncateForView(m.content));
+                return;
+            }
+            if (role === 'assistant') {
+                var a = startAssistantTurn();
+                var bodyText = truncateForView(m.content || '');
+                if (m.tool_calls && m.tool_calls.length) {
+                    bodyText += (bodyText ? '\n\n' : '') + '[tool_calls: ' + m.tool_calls.length + ']';
+                }
+                a.body.textContent = bodyText;
+                return;
+            }
+            if (role === 'tool') {
+                var label = 'Herramienta' + (m.name ? ' · ' + m.name : '');
+                appendNote(label + '\n' + truncateForView(m.content));
+            }
+        });
+        log.scrollTop = log.scrollHeight;
+    }
+    function formatSessionWhen(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return iso.slice(0, 16);
+        return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+    }
+    function highlightActiveSession() {
+        var ul = document.getElementById('sessList');
+        if (!ul) return;
+        [].forEach.call(ul.querySelectorAll('li'), function (li) {
+            li.classList.toggle('active', sessionId && li.getAttribute('data-sid') === sessionId);
+        });
+    }
+    function loadSessions() {
+        if (!cfg) return;
+        var st = document.getElementById('sessStatus');
+        var ul = document.getElementById('sessList');
+        var allCb = document.getElementById('sessAllUsers');
+        var all = allCb && allCb.checked;
+        st.textContent = 'Cargando…';
+        var q = all ? 'limit=50&all=1' : 'limit=50&who=' + encodeURIComponent(sessionWho || '');
+        fetch('{{ path('admin_asistente_sessions') }}?' + q, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.text().then(function (t) { return { r: r, t: t }; }); })
+            .then(function (o) {
+                var j = null;
+                try { j = JSON.parse(o.t); } catch (e) {
+                    st.textContent = 'Error al leer lista';
+                    return;
+                }
+                if (!o.r.ok || j.error) {
+                    st.textContent = 'Error: ' + JSON.stringify(j).slice(0, 200);
+                    return;
+                }
+                if (!j.store_enabled) {
+                    st.textContent = 'Sin almacén de sesiones (revisa AGENT_DB_DSN).';
+                    ul.innerHTML = '';
+                    return;
+                }
+                var rows = j.sessions || [];
+                ul.innerHTML = '';
+                rows.forEach(function (s) {
+                    var li = document.createElement('li');
+                    li.setAttribute('data-sid', s.id);
+                    var title = (s.title && String(s.title).trim()) ? s.title : ('Chat ' + (s.id || '').slice(0, 8));
+                    var sub = (s.who ? s.who + ' · ' : '') + formatSessionWhen(s.updated_at || s.created_at);
+                    li.innerHTML = '<span class="t"></span><span class="d"></span>';
+                    li.querySelector('.t').textContent = title;
+                    li.querySelector('.d').textContent = formatSessionWhen(s.updated_at || s.created_at);
+                    li.setAttribute('title', sub);
+                    li.addEventListener('click', function () {
+                        openSession(s.id);
+                    });
+                    ul.appendChild(li);
+                });
+                st.textContent = rows.length ? (rows.length + ' conversaciones') : 'Sin conversaciones guardadas.';
+                highlightActiveSession();
+            });
+    }
+    function openSession(sid) {
+        if (!cfg || !sid) return;
+        var st = document.getElementById('sessStatus');
+        st.textContent = 'Cargando mensajes…';
+        fetch('{{ path('admin_asistente_session_messages', { sessionId: '00000000-0000-4000-8000-000000000001' }) }}'.replace('00000000-0000-4000-8000-000000000001', sid) + '?limit=2000', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) { return r.text().then(function (t) { return { r: r, t: t }; }); })
+            .then(function (o) {
+                var j = null;
+                try { j = JSON.parse(o.t); } catch (e) {
+                    st.textContent = 'Error al leer historial';
+                    return;
+                }
+                if (!o.r.ok || j.error) {
+                    st.textContent = 'Error: ' + JSON.stringify(j).slice(0, 240);
+                    return;
+                }
+                sessionId = sid;
+                updateSessionLabel();
+                renderHistoryMessages(j.messages || []);
+                st.textContent = 'Historial cargado (' + (j.count || 0) + ' mensajes). Sigue escribiendo para continuar.';
+                highlightActiveSession();
+            });
+    }
+    document.getElementById('sessRefresh').addEventListener('click', loadSessions);
+    document.getElementById('sessNew').addEventListener('click', function () {
+        sessionId = null;
+        updateSessionLabel();
+        clearChatLog();
+        highlightActiveSession();
+        var st = document.getElementById('sessStatus');
+        if (st) st.textContent = 'Nueva conversación: el próximo envío creará sesión.';
+    });
+    var sessAllEl = document.getElementById('sessAllUsers');
+    if (sessAllEl) sessAllEl.addEventListener('change', loadSessions);
+    if (cfg) loadSessions();
 
     // ---------- index status (unchanged) ----------
     function ixText(j) {
@@ -300,6 +454,19 @@
         log.scrollTop = log.scrollHeight;
     }
 
+    function parseChatResponseBody(text) {
+        text = text == null ? '' : text;
+        var t = text.trim();
+        if (!t) {
+            return { j: null, parseError: 'empty' };
+        }
+        try {
+            return { j: JSON.parse(text), parseError: null };
+        } catch (e) {
+            return { j: null, parseError: e };
+        }
+    }
+
     function sendJsonChat(text) {
         if (!cfg) return;
         var assistant = startAssistantTurn();
@@ -317,13 +484,24 @@
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify(payload)
         }).then(function (r) {
-            return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+            return r.text().then(function (text) {
+                var p = parseChatResponseBody(text);
+                return { ok: r.ok, r: r, text: text, j: p.j, parseError: p.parseError };
+            });
         }).then(function (o) {
+            if (o.parseError) {
+                assistant.body.textContent = '';
+                var snippet = (o.text || '').replace(/\s+/g, ' ').slice(0, 280);
+                appendNote('Error: respuesta no JSON (HTTP ' + o.r.status + '). Suele ser HTML de error del servidor o timeout. Fragmento: ' + snippet);
+                return;
+            }
             if (o.ok && o.j && typeof o.j.reply === 'string') {
                 assistant.body.textContent = o.j.reply;
                 if (o.j.session_id) {
                     sessionId = o.j.session_id;
                     updateSessionLabel();
+                    highlightActiveSession();
+                    loadSessions();
                 }
                 if (o.j.tool_trace && o.j.tool_trace.length) {
                     var done = o.j.tool_trace.filter(function (x) { return x.type === 'result'; });

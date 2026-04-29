@@ -39,6 +39,18 @@ admin_asistente_operator_config_save:
     controller: App\Controller\AdminAsistenteController::operatorConfigSave
     methods: POST
 
+admin_asistente_sessions:
+    path: /agent/sessions
+    controller: App\Controller\AdminAsistenteController::sessionsList
+    methods: GET
+
+admin_asistente_session_messages:
+    path: /agent/sessions/{sessionId}/messages
+    controller: App\Controller\AdminAsistenteController::sessionMessages
+    methods: GET
+    requirements:
+        sessionId: '[0-9a-f\\-]{36}'
+
 dashboard:
     path: /
     controller: App\Controller\HomeController::index
