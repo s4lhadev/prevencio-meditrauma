@@ -1,10 +1,10 @@
-<?php
+﻿<?php
 
 namespace App\Repository;
 
 use App\Entity\TarifaRevisionMedica;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Common\Persistence\ManagerRegistry;
+use Doctrine\Persistence\ManagerRegistry;
 
 /**
  * @method TarifaRevisionMedica|null find($id, $lockMode = null, $lockVersion = null)

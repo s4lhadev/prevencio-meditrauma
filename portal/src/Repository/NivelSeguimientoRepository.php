@@ -1,10 +1,10 @@
-<?php
+﻿<?php
 
 namespace App\Repository;
 
 use App\Entity\NivelSeguimiento;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Common\Persistence\ManagerRegistry;
+use Doctrine\Persistence\ManagerRegistry;
 
 /**
  * @method NivelSeguimiento|null find($id, $lockMode = null, $lockVersion = null)
