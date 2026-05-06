@@ -4,12 +4,12 @@ fos_user:
     firewall_name: main
     user_class: App\Entity\User
     from_email:
-        address: soporte@opentic.eu
-        sender_name: soporte@opentic.eu
+        address: noreply@mdtprevencion.com
+        sender_name: MDT Prevención
     service:
         mailer:  fos_user.mailer.default
     resetting:
         email:
             from_email:
-                address: soporte@opentic.eu
-                sender_name: soporte@opentic.eu
+                address: noreply@mdtprevencion.com
+                sender_name: MDT Prevención
